@@ -26,5 +26,8 @@ For a deep dive into how it all works, you can read our full paper [Link](https:
 **Predicting Genetic Variant Pathogenicity Using Vector Embeddings** 
 
 
+### 📜 Patent
+
+U.S. Provisional Patent Application No. 63/821,249, filed June 10, 2025.
 
 
