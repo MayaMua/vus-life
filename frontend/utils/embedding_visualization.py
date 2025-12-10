@@ -1,0 +1,346 @@
+import matplotlib.pyplot as plt
+import numpy as np
+from sklearn.preprocessing import LabelEncoder
+from matplotlib.colors import ListedColormap
+import os
+from matplotlib.lines import Line2D
+from typing import List, Dict, Any, Optional, Tuple, Union, Literal
+import logging
+import pandas as pd
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
+
+# Standard colors for binary classification (benign: blue, pathogenic: red)
+BINARY_COLORS = {'benign': '#5555FF', 'pathogenic': '#FF5555'}
+# FOUR_CLASS_COLORS = {'benign': '#5094D5', 'likely_benign': '#ABD8E5', 'likely_pathogenic': '#F9AD95', 'pathogenic': '#D15354'}
+
+# Comprehensive color mapping for all pathogenicity categories used across different genes
+COMPREHENSIVE_PATHOGENICITY_COLORS = {
+    # BRCA categories (5 types)
+    'pathogenic': '#DB3124',           # Red
+    'likely_pathogenic': '#F9AD95',    # Yellow
+
+    'benign': '#4B74B2',              # Blue
+    'likely_benign': '#ABD8E5',       # Light blue
+    'not_yet_reviewed': '#00FF00',    # Green
+    
+    # Additional categories (ClinVar combined categories)
+    'pathogenic_or_likely': '#FC8C5A',     # Dark red (between pathogenic and likely_pathogenic)
+    'benign_or_likely': '#95C1E2',         # Dark blue (between benign and likely_benign)
+    
+    # Uncertain significance (if present)
+    'uncertain_significance': '#00FF00',    # 
+    'unknown': '#00FF00',                   # Dark green for unknown variants
+    'query': '#00FF00'                      # Dark red for test variants (query)
+}
+
+def create_combined_embedding_figure(merged_df: pd.DataFrame, 
+                                    figure_title: str,
+                                    model_name: Optional[str] = None,
+                                    figsize: Tuple[int, int] = (18, 8), 
+                                    save_path: Optional[str] = None, 
+                                    show: bool = False) -> plt.Figure:
+    """
+    Create a combined figure showing embedding results for 3 dimension reduction methods.
+    
+    Args:
+        merged_df: DataFrame with columns: variant_id, pca_x, pca_y, tsne_x, tsne_y, umap_x, umap_y, pathogenicity_original
+        figure_title: Title for the figure
+        model_name: Name of the embedding model to display on the left side (optional)
+        figsize: Figure size (width, height)
+        save_path: Path to save the combined plot
+        show: Whether to display the plot
+        
+    Returns:
+        Matplotlib figure object
+    """
+    methods = ['PCA', 't-SNE', 'UMAP']  # Standard order for titles
+    method_columns = ['pca', 't-sne', 'umap']  # Column names in your data (with hyphen for t-sne)
+    
+    # Create figure with subplots (1 row, 3 columns)
+    fig, axes = plt.subplots(1, 3, figsize=figsize)
+    
+    # Use comprehensive color map
+    color_map = COMPREHENSIVE_PATHOGENICITY_COLORS
+    
+    # Debug: Print available columns
+    print(f"Available columns: {list(merged_df.columns)}")
+    
+    # Get unique labels for legend
+    unique_labels = sorted(merged_df['pathogenicity_original'].unique())
+    print(f"Unique labels: {unique_labels}")
+    
+    # Create legend elements with special handling for test variants
+    legend_elements = []
+    for i, label in enumerate(unique_labels):
+        color = color_map.get(label, "#888888")
+        
+        # Special styling for test variants (query/unknown)
+        if label in ['query', 'unknown', 'not_yet_reviewed']:
+            legend_elements.append(Line2D([0], [0], marker='D', color='w',
+                                         markerfacecolor=color, markersize=10,
+                                         markeredgecolor='black', markeredgewidth=1.0,
+                                         label=f'{label} (unknown)', alpha=0.9))
+        else:
+            legend_elements.append(Line2D([0], [0], marker='o', color='w',
+                                         markerfacecolor=color, markersize=12, 
+                                         label=f'{label} (known)', alpha=0.7))
+    
+    # Plot each method
+    for i, (method_title, method_col) in enumerate(zip(methods, method_columns)):
+        ax = axes[i]
+        
+        # Get coordinates for this method
+        x_col = f"{method_col}_x"
+        y_col = f"{method_col}_y"
+        
+        print(f"Looking for columns: {x_col}, {y_col}")
+        
+        if x_col in merged_df.columns and y_col in merged_df.columns:
+            # Filter out NaN values
+            valid_mask = merged_df[x_col].notna() & merged_df[y_col].notna()
+            if valid_mask.any():
+                # Plot each class
+                for label in unique_labels:
+                    mask = (merged_df['pathogenicity_original'] == label) & valid_mask
+                    if mask.any():
+                        color = color_map.get(label, "#888888")
+                        
+                        # Special styling for test variants (query/unknown)
+                        if label in ['query', 'unknown', 'not_yet_reviewed']:
+                            # Use diamond markers with black edge for test variants
+                            ax.scatter(merged_df.loc[mask, x_col], merged_df.loc[mask, y_col], 
+                                      c=color, alpha=0.9, s=50, marker='D', 
+                                      edgecolors='black', linewidths=1.0)
+                        else:
+                            # Use circle markers for training variants
+                            ax.scatter(merged_df.loc[mask, x_col], merged_df.loc[mask, y_col], 
+                                      c=color, alpha=0.7, s=15, marker='o')
+                
+                # Set labels and grid
+                ax.set_xlabel('Component 1', fontsize=14)
+                ax.set_ylabel('Component 2', fontsize=14)
+                ax.grid(True, alpha=0.3)
+                ax.set_title(f'{method_title}', fontsize=18, fontweight='bold', pad=20)
+            else:
+                # Handle case with no valid data
+                ax.text(0.5, 0.5, f'{method_title}\nNo valid data', ha='center', va='center',
+                       transform=ax.transAxes, fontsize=14, color='gray')
+                ax.set_xticks([])
+                ax.set_yticks([])
+                ax.set_title(f'{method_title}', fontsize=18, fontweight='bold', pad=20)
+        else:
+            # Handle missing columns
+            ax.text(0.5, 0.5, f'{method_title}\nMissing columns', ha='center', va='center',
+                   transform=ax.transAxes, fontsize=14, color='gray')
+            ax.set_xticks([])
+            ax.set_yticks([])
+            ax.set_title(f'{method_title}', fontsize=18, fontweight='bold', pad=20)
+    
+    # Set main title
+    fig.suptitle(figure_title, fontsize=24, fontweight='bold', y=0.98)
+    
+    # Add model name on the left side of the figure (vertical text)
+    if model_name:
+        # Position the text on the left side, vertically centered
+        fig.text(0.02, 0.5, model_name, fontsize=20, fontweight='bold',
+                rotation=90, ha='center', va='center', 
+                bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
+    
+    # Add legend at the bottom
+    fig.legend(handles=legend_elements, loc='lower center', ncol=len(legend_elements), 
+              bbox_to_anchor=(0.5, -0.08), frameon=True, fontsize=18)
+    
+    plt.tight_layout()
+    # Adjust layout to make room for model name on the left if present
+    if model_name:
+        plt.subplots_adjust(bottom=0.15, top=0.80, left=0.08)
+    else:
+        plt.subplots_adjust(bottom=0.15, top=0.80)
+    
+    # Save plot
+    if save_path:
+        # Use SVG format for vector graphics (smaller size, scalable)
+        svg_path = save_path.replace('.png', '.svg')
+        plt.savefig(svg_path, format='svg', bbox_inches='tight')
+        logger.info(f"Saved combined embedding figure to {svg_path}")
+        
+        # Also save PNG for compatibility if needed
+        png_path = save_path.replace('.svg', '.png')  
+        plt.savefig(png_path, format='png', dpi=150, bbox_inches='tight')
+        logger.info(f"Also saved PNG version to {png_path}")
+    
+    if show:
+        plt.show()
+    
+    return fig
+
+
+def create_all_models_combined_figure(models_data: Dict[str, pd.DataFrame],
+                                     gene_symbol: str,
+                                     figsize: Tuple[int, int] = (20, 18),
+                                     save_path: Optional[str] = None,
+                                     show: bool = False,
+                                     title: Optional[str] = None) -> plt.Figure:
+    """
+    Create a combined figure showing embedding results for all models in a grid.
+    Each row represents a model, each column represents a dimension reduction method.
+    
+    Args:
+        models_data: Dictionary mapping model names to DataFrames with columns:
+                    variant_id, pca_x, pca_y, t-sne_x, t-sne_y, umap_x, umap_y, pathogenicity_original
+        gene_symbol: Gene symbol for the title (e.g., 'BRCA1', 'FBN1')
+        figsize: Figure size (width, height)
+        save_path: Path to save the combined plot
+        show: Whether to display the plot
+        title: Optional custom title for the figure. If None, generates title automatically.
+        
+    Returns:
+        Matplotlib figure object
+    """
+    methods = ['PCA', 't-SNE', 'UMAP']  # Standard order for titles
+    method_columns = ['pca', 't-sne', 'umap']  # Column names in your data (with hyphen for t-sne)
+    
+    # Get model names in order (preserve insertion order if Python 3.7+)
+    model_names = list(models_data.keys())
+    num_models = len(model_names)
+    
+    if num_models == 0:
+        raise ValueError("No models data provided")
+    
+    # Create figure with subplots (num_models rows, 3 columns)
+    fig, axes = plt.subplots(num_models, 3, figsize=figsize)
+    
+    # Handle case where there's only one model (axes becomes 1D)
+    if num_models == 1:
+        axes = axes.reshape(1, -1)
+    
+    # Use comprehensive color map
+    color_map = COMPREHENSIVE_PATHOGENICITY_COLORS
+    
+    # Collect all unique labels across all models for consistent legend
+    all_labels = set()
+    for df in models_data.values():
+        all_labels.update(df['pathogenicity_original'].unique())
+    unique_labels = sorted(all_labels)
+    
+    # Count known and unknown variants from all data combined
+    # Use first model's data for counts (all models should have same variants)
+    first_df = list(models_data.values())[0]
+    known_labels = [label for label in unique_labels if label not in ['query', 'unknown', 'not_yet_reviewed']]
+    unknown_labels = [label for label in unique_labels if label in ['query', 'unknown', 'not_yet_reviewed']]
+    
+    known_count = first_df['pathogenicity_original'].isin(known_labels).sum()
+    unknown_count = first_df['pathogenicity_original'].isin(unknown_labels).sum()
+    
+    # Create legend elements with special handling for test variants
+    legend_elements = []
+    for label in unique_labels:
+        color = color_map.get(label, "#888888")
+        
+        # Special styling for test variants (query/unknown)
+        if label in ['query', 'unknown', 'not_yet_reviewed']:
+            legend_elements.append(Line2D([0], [0], marker='D', color='w',
+                                         markerfacecolor=color, markersize=10,
+                                         markeredgecolor='black', markeredgewidth=1.0,
+                                         label=f'{label} (unknown)', alpha=0.9))
+        else:
+            legend_elements.append(Line2D([0], [0], marker='o', color='w',
+                                         markerfacecolor=color, markersize=12, 
+                                         label=label, alpha=0.7))
+    
+    # Plot each model (row) and each method (column)
+    for row_idx, model_name in enumerate(model_names):
+        merged_df = models_data[model_name]
+        
+        for col_idx, (method_title, method_col) in enumerate(zip(methods, method_columns)):
+            ax = axes[row_idx, col_idx]
+            
+            # Get coordinates for this method
+            x_col = f"{method_col}_x"
+            y_col = f"{method_col}_y"
+            
+            if x_col in merged_df.columns and y_col in merged_df.columns:
+                # Filter out NaN values
+                valid_mask = merged_df[x_col].notna() & merged_df[y_col].notna()
+                if valid_mask.any():
+                    # Plot each class
+                    for label in unique_labels:
+                        mask = (merged_df['pathogenicity_original'] == label) & valid_mask
+                        if mask.any():
+                            color = color_map.get(label, "#888888")
+                            
+                            # Special styling for test variants (query/unknown)
+                            if label in ['query', 'unknown', 'not_yet_reviewed']:
+                                # Use diamond markers with black edge for test variants
+                                ax.scatter(merged_df.loc[mask, x_col], merged_df.loc[mask, y_col], 
+                                          c=color, alpha=0.9, s=50, marker='D', 
+                                          edgecolors='black', linewidths=1.0)
+                            else:
+                                # Use circle markers for training variants
+                                ax.scatter(merged_df.loc[mask, x_col], merged_df.loc[mask, y_col], 
+                                          c=color, alpha=0.7, s=15, marker='o')
+                    
+                    # Set labels and grid
+                    ax.set_xlabel('Component 1', fontsize=14)
+                    ax.set_ylabel('Component 2', fontsize=14)
+                    ax.grid(True, alpha=0.3)
+                    
+                    # Add method title only on top row
+                    if row_idx == 0:
+                        ax.set_title(f'{method_title}', fontsize=18, fontweight='bold', pad=20)
+                
+                else:
+                    # Handle case with no valid data
+                    ax.text(0.5, 0.5, f'{method_title}\nNo valid data', ha='center', va='center',
+                           transform=ax.transAxes, fontsize=14, color='gray')
+                    ax.set_xticks([])
+                    ax.set_yticks([])
+                    if row_idx == 0:
+                        ax.set_title(f'{method_title}', fontsize=18, fontweight='bold', pad=20)
+            else:
+                # Handle missing columns
+                ax.text(0.5, 0.5, f'{method_title}\nMissing columns', ha='center', va='center',
+                       transform=ax.transAxes, fontsize=14, color='gray')
+                ax.set_xticks([])
+                ax.set_yticks([])
+                if row_idx == 0:
+                    ax.set_title(f'{method_title}', fontsize=18, fontweight='bold', pad=20)
+        
+        # Add model name on the left side (further increased distance from plots)
+        axes[row_idx, 0].text(-0.25, 0.5, model_name, rotation=90, ha='center', va='center',
+                               transform=axes[row_idx, 0].transAxes, fontsize=20, fontweight='bold')
+    
+    # Set main title (increased distance from plots)
+    if title is None:
+        total_variants = known_count + unknown_count
+        figure_title = f'Embedding results of {gene_symbol} - {total_variants} variants'
+    else:
+        figure_title = title
+    fig.suptitle(figure_title, fontsize=28, fontweight='bold', y=0.95)
+    
+    # Add legend at the bottom (increased font size)
+    fig.legend(handles=legend_elements, loc='lower center', ncol=len(legend_elements), 
+              bbox_to_anchor=(0.5, -0.01), frameon=True, fontsize=18)
+    
+    plt.tight_layout()
+    plt.subplots_adjust(bottom=0.08, top=0.85, left=0.12)
+    
+    # Save plot
+    if save_path:
+        # Use SVG format for vector graphics (smaller size, scalable)
+        svg_path = save_path.replace('.png', '.svg')
+        plt.savefig(svg_path, format='svg', bbox_inches='tight')
+        logger.info(f"Saved all-models combined embedding figure to {svg_path}")
+        
+        # Also save PNG for compatibility if needed
+        png_path = save_path.replace('.svg', '.png')  
+        plt.savefig(png_path, format='png', dpi=150, bbox_inches='tight')
+        logger.info(f"Also saved PNG version to {png_path}")
+    
+    if show:
+        plt.show()
+    
+    return fig
