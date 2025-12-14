@@ -11,6 +11,7 @@ sys.path.insert(0, project_root)
 
 if __name__ == "__main__":
     gene_symbol = "FBN1"
+    job_name = "query_1"
                 
     embedding_model_names = [
         "all-mpnet-base-v2", 
@@ -20,7 +21,7 @@ if __name__ == "__main__":
     annotation_method = "vep"
     k_value = 5  # Select k=5 for prediction results
 
-    pred_result_df_path = f"data_user/user_query/processed/{gene_symbol}/{annotation_method}/prediction_results_k{k_value}_combined.csv"
+    pred_result_df_path = f"data_user/user_query/processed/{gene_symbol}/{job_name}/{annotation_method}/prediction_results_k{k_value}_combined.csv"
     pred_result_df = pd.read_csv(pred_result_df_path)
 
     # Get total number of variants (all are Pathogenic according to user)

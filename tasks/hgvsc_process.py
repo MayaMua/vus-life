@@ -120,8 +120,12 @@ def main():
     input_dir = "data_local_raw/FBN1_phenotypes_v2"
     output_dir = "data_user/user_query/inputs/FBN1/query_1"
     
+    # Create output directory if it doesn't exist
+    os.makedirs(output_dir, exist_ok=True)
+    
     # Get all CSV files in the directory
-    csv_files = list(Path(input_dir).glob("*.csv"))
+    # csv_files = list(Path(input_dir).glob("*.csv"))
+    csv_files = ["data_local_raw/FBN1_phenotypes_v2/Both Aortic Dilation and Mitral Valve Prolapse.csv"]
     
     if not csv_files:
         print(f"No CSV files found in {input_dir}")
@@ -129,20 +133,22 @@ def main():
     
     print(f"Found {len(csv_files)} CSV file(s) to process:")
     for csv_file in csv_files:
-        print(f"  - {csv_file.name}")
+        csv_path = Path(csv_file)
+        print(f"  - {csv_path.name}")
     
     # Process each CSV file
     for csv_file in tqdm(csv_files, desc="Processing files"):
-        print(f"\nProcessing: {csv_file.name}")
+        csv_path = Path(csv_file)
+        print(f"\nProcessing: {csv_path.name}")
         try:
             process_csv_file(
-                str(csv_file),
+                str(csv_path),
                 TRANSCRIPT_ACCESSION,
                 GENOMIC_ACCESSION,
                 output_dir
             )
         except Exception as e:
-            print(f"Error processing {csv_file.name}: {e}")
+            print(f"Error processing {csv_path.name}: {e}")
             continue
     
     print("\nProcessing complete!")

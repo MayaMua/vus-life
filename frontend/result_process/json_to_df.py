@@ -356,6 +356,7 @@ def save_df_to_csv(df: pd.DataFrame, output_path: str) -> None:
         df: DataFrame to save
         output_path: Path to output CSV file
     """
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
     df.to_csv(output_path, index=False)
     print(f"DataFrame saved to {output_path}")
 
@@ -466,6 +467,7 @@ if __name__ == "__main__":
         # After all models are processed, convert sets to comma-separated strings
         df_fininalized_results["top_similar_variants"] = [', '.join(sorted(variant_set)) for variant_set in top_similar_variants_sets]
 
+    df_fininalized_results.to_csv(f"data_user/user_query/processed/{gene_symbol}/{job_name}/{annotation_method}/prediction_results_k{k_value}.csv", index=False)
             
     # Add ClinVar data if requested (only for prediction variants, after merging existing variants)
     if check_clinvar:
