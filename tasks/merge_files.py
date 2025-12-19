@@ -9,12 +9,18 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 if __name__ == "__main__":
     csv_files = []
     combined_df = pd.DataFrame()
-    fbn1_csv_dir = "data_user/user_query/inputs/FBN1/query_1"
-    if os.path.exists(fbn1_csv_dir):
-        csv_files.extend([str(f) for f in Path(fbn1_csv_dir).glob("*.csv")])  
+    gene_symbol = "FBN1"
+    task_name = "query_2"
+    gene_csv_dir = f"data_user/user_query/inputs/{gene_symbol}/{task_name}"
+    if os.path.exists(gene_csv_dir):
+        csv_files.extend([str(f) for f in Path(gene_csv_dir).glob("*.csv")])  
 
     for csv_file in csv_files:
         # Read CSV file
+        # Remove files that contains 'test' in name
+        base_name = Path(csv_file).stem
+        if 'test' in base_name:
+            continue
         df = pd.read_csv(csv_file)
         
         # Convert chromosome and position columns from float to integer if they exist
@@ -31,4 +37,4 @@ if __name__ == "__main__":
     
     combined_df.drop_duplicates(subset=['hgvs_genomic_38'], inplace=True)
     # All values are already strings since we read with dtype=str
-    combined_df.to_csv("data_user/user_query/inputs/FBN1/query_1/FBN1_test.csv", index=False)
+    combined_df.to_csv(f"data_user/user_query/inputs/{gene_symbol}/{task_name}/{gene_symbol}_test.csv", index=False)
