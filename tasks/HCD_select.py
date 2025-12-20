@@ -18,11 +18,25 @@ filter_col = 'HCD'
 filter_keywords = ['Disulfide bonds', 'Ca2+ binding']
 
 # Load all csv files from original_folder
-csv_files = list(Path(original_folder).glob("*.csv"))
-# csv_files = ["data_local_raw/FBN1_phenotypes_v2/Both Aortic Dilation and Mitral Valve Prolapse.csv"]
+# csv_files = list(Path(original_folder).glob("*.csv"))
+csv_files = [
+    "data_local_raw/FBN1_phenotypes_v2/Aortic Dilation.csv",
+    "data_local_raw/FBN1_phenotypes_v2/Both Aortic Dilation and Mitral Valve Prolapse.csv",
+    "data_local_raw/FBN1_phenotypes_v2/Mitral Valve Regurgitation Prolapse.csv",
+    "data_local_raw/FBN1_phenotypes_v2/No Cardiovascular Involvement.csv"
+]
+
+labels = {
+    "AD",
+    "AD_MVP",
+    "MVP",
+    "NCI"
+}
+
+
 # Get base name of csv file
 
-for csv_file in csv_files:
+for csv_file, label in zip(csv_files, labels):    
     base_name = Path(csv_file).stem
     df_original = pd.read_csv(csv_file)
     print(f"Processing {base_name}...")
@@ -34,7 +48,7 @@ for csv_file in csv_files:
     pattern = '|'.join(escaped_keywords)
     filtered_df = df_original[df_original[filter_col].astype(str).str.contains(pattern, case=False, na=False, regex=True)]
     df_combined = df_processed.merge(filtered_df, on=['Protein nomenclature', 'cDNA Nomenclature'], how='inner')
-
+    df_combined['label'] = label
     df_combined.to_csv(os.path.join(output_folder, f"{base_name}.csv"), index=False)
 
 print("\n--- All Done ---")
