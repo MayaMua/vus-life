@@ -381,8 +381,8 @@ if __name__ == "__main__":
     # ]
     annotation_method = "vep"
     k_value = 5  # Select k=5 for prediction results
-    job_name = "query_1"
-    append_existing_variants = True
+    job_name = "query_2"
+    append_existing_variants = False
     check_clinvar = True
     load_test_data_metadata = True
     
@@ -436,7 +436,8 @@ if __name__ == "__main__":
                 df_fininalized_results["hgvs_genomic_38"] = [result['metadata']['hgvs_genomic_38'] for result in results]
                 df_fininalized_results["hgvs_protein"] = [result['metadata']['hgvs_protein'] for result in results]
                 df_fininalized_results["most_severe_consequence"] = [result['metadata']['most_severe_consequence'] for result in results]
-                df_fininalized_results["pathogenicity_original"] = "unknown"
+                if append_existing_variants:
+                    df_fininalized_results["pathogenicity_original"] = "query"
                 # Initialize sets for accumulating formatted variant strings across models
                 top_similar_variants_sets = [set() for _ in results]
                 load_test_data_metadata = False
@@ -466,8 +467,9 @@ if __name__ == "__main__":
         
         # After all models are processed, convert sets to comma-separated strings
         df_fininalized_results["top_similar_variants"] = [', '.join(sorted(variant_set)) for variant_set in top_similar_variants_sets]
-
-    df_fininalized_results.to_csv(f"data_user/user_query/processed/{gene_symbol}/{job_name}/{annotation_method}/prediction_results_k{k_value}.csv", index=False)
+    save_dir = f"data_user/user_query/processed/{gene_symbol}/{job_name}/{annotation_method}"
+    os.makedirs(save_dir, exist_ok=True)
+    df_fininalized_results.to_csv(f"{save_dir}/prediction_results_k{k_value}.csv", index=False)
             
     # Add ClinVar data if requested (only for prediction variants, after merging existing variants)
     if check_clinvar:

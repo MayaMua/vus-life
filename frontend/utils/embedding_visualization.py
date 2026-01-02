@@ -7,6 +7,7 @@ from matplotlib.lines import Line2D
 from typing import List, Dict, Any, Optional, Tuple, Union, Literal
 import logging
 import pandas as pd
+import re
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -19,16 +20,16 @@ BINARY_COLORS = {'benign': '#5555FF', 'pathogenic': '#FF5555'}
 # Comprehensive color mapping for all pathogenicity categories used across different genes
 COMPREHENSIVE_PATHOGENICITY_COLORS = {
     # BRCA categories (5 types)
-    'pathogenic': '#DB3124',           # Red
-    'likely_pathogenic': '#F9AD95',    # Yellow
+    'pathogenic': '#FF5555',           # Red
+    'likely_pathogenic': '#D15354',    # Yellow
 
-    'benign': '#4B74B2',              # Blue
-    'likely_benign': '#ABD8E5',       # Light blue
+    'benign': '#5094D5',              # Blue
+    'likely_benign': '#5555FF',       # Light blue
     'not_yet_reviewed': '#00FF00',    # Green
     
     # Additional categories (ClinVar combined categories)
-    'pathogenic_or_likely': '#FC8C5A',     # Dark red (between pathogenic and likely_pathogenic)
-    'benign_or_likely': '#95C1E2',         # Dark blue (between benign and likely_benign)
+    'pathogenic_or_likely': '#F9AD95',     # Dark red (between pathogenic and likely_pathogenic)
+    'benign_or_likely': '#ABD8E5',         # Dark blue (between benign and likely_benign)
     
     # Uncertain significance (if present)
     'uncertain_significance': '#00FF00',    # 
@@ -36,9 +37,44 @@ COMPREHENSIVE_PATHOGENICITY_COLORS = {
     'query': '#00FF00'                      # Dark red for test variants (query)
 }
 
+def format_gene_name_in_title(title: str, gene_symbol: Optional[str] = None) -> str:
+    """
+    Format gene name in title to be bold and italic using LaTeX formatting.
+    
+    Args:
+        title: The title string that may contain a gene symbol
+        gene_symbol: Optional gene symbol to format. If None, tries to extract from title.
+        
+    Returns:
+        Title with gene name formatted as bold italic using LaTeX math mode
+    """
+    if gene_symbol:
+        # Replace gene symbol with bold italic version using LaTeX
+        # Use \boldsymbol{\mathit{...}} for bold italic
+        # Use lambda to avoid regex escape issues with backslashes
+        formatted_gene = f'$\\boldsymbol{{\\mathit{{{gene_symbol}}}}}$'
+        # Replace all occurrences of the gene symbol (case-insensitive)
+        pattern = re.compile(re.escape(gene_symbol), re.IGNORECASE)
+        # Use lambda to return the replacement string without regex interpretation
+        return pattern.sub(lambda m: formatted_gene, title)
+    else:
+        # Try to extract common gene patterns (uppercase letters and numbers)
+        # Pattern for gene symbols (typically 2-10 uppercase letters/numbers)
+        gene_pattern = r'\b([A-Z][A-Z0-9]{1,9})\b'
+        matches = re.findall(gene_pattern, title)
+        if matches:
+            # Use the first match (likely the gene symbol)
+            gene_symbol = matches[0]
+            formatted_gene = f'$\\boldsymbol{{\\mathit{{{gene_symbol}}}}}$'
+            pattern = re.compile(re.escape(gene_symbol), re.IGNORECASE)
+            # Use lambda to return the replacement string without regex interpretation
+            return pattern.sub(lambda m: formatted_gene, title)
+    return title
+
 def create_combined_embedding_figure(merged_df: pd.DataFrame, 
                                     figure_title: str,
                                     model_name: Optional[str] = None,
+                                    gene_symbol: Optional[str] = None,
                                     figsize: Tuple[int, int] = (18, 8), 
                                     save_path: Optional[str] = None, 
                                     show: bool = False) -> plt.Figure:
@@ -46,9 +82,10 @@ def create_combined_embedding_figure(merged_df: pd.DataFrame,
     Create a combined figure showing embedding results for 3 dimension reduction methods.
     
     Args:
-        merged_df: DataFrame with columns: variant_id, pca_x, pca_y, tsne_x, tsne_y, umap_x, umap_y, pathogenicity_original
+        merged_df: DataFrame with columns: variant_id, pca_x, pca_y, tsne_x, tsne_y, umap_x, umap_y, labels
         figure_title: Title for the figure
         model_name: Name of the embedding model to display on the left side (optional)
+        gene_symbol: Gene symbol to format as bold italic in the title (optional)
         figsize: Figure size (width, height)
         save_path: Path to save the combined plot
         show: Whether to display the plot
@@ -56,6 +93,10 @@ def create_combined_embedding_figure(merged_df: pd.DataFrame,
     Returns:
         Matplotlib figure object
     """
+    # Check that required 'labels' column exists
+    if 'labels' not in merged_df.columns:
+        raise ValueError("DataFrame must have a column named 'labels'")
+    
     methods = ['PCA', 't-SNE', 'UMAP']  # Standard order for titles
     method_columns = ['pca', 't-sne', 'umap']  # Column names in your data (with hyphen for t-sne)
     
@@ -69,7 +110,7 @@ def create_combined_embedding_figure(merged_df: pd.DataFrame,
     print(f"Available columns: {list(merged_df.columns)}")
     
     # Get unique labels for legend
-    unique_labels = sorted(merged_df['pathogenicity_original'].unique())
+    unique_labels = sorted(merged_df['labels'].unique()) 
     print(f"Unique labels: {unique_labels}")
     
     # Create legend elements with special handling for test variants
@@ -104,7 +145,7 @@ def create_combined_embedding_figure(merged_df: pd.DataFrame,
             if valid_mask.any():
                 # Plot each class
                 for label in unique_labels:
-                    mask = (merged_df['pathogenicity_original'] == label) & valid_mask
+                    mask = (merged_df['labels'] == label) & valid_mask
                     if mask.any():
                         color = color_map.get(label, "#888888")
                         
@@ -139,8 +180,9 @@ def create_combined_embedding_figure(merged_df: pd.DataFrame,
             ax.set_yticks([])
             ax.set_title(f'{method_title}', fontsize=18, fontweight='bold', pad=20)
     
-    # Set main title
-    fig.suptitle(figure_title, fontsize=24, fontweight='bold', y=0.98)
+    # Set main title with gene name formatted as bold italic
+    formatted_title = format_gene_name_in_title(figure_title, gene_symbol)
+    fig.suptitle(formatted_title, fontsize=24, fontweight='bold', y=0.98)
     
     # Add model name on the left side of the figure (vertical text)
     if model_name:
@@ -151,7 +193,7 @@ def create_combined_embedding_figure(merged_df: pd.DataFrame,
     
     # Add legend at the bottom
     fig.legend(handles=legend_elements, loc='lower center', ncol=len(legend_elements), 
-              bbox_to_anchor=(0.5, -0.08), frameon=True, fontsize=18)
+              bbox_to_anchor=(0.5, -0.08), frameon=True, fontsize=22)
     
     plt.tight_layout()
     # Adjust layout to make room for model name on the left if present
@@ -190,7 +232,7 @@ def create_all_models_combined_figure(models_data: Dict[str, pd.DataFrame],
     
     Args:
         models_data: Dictionary mapping model names to DataFrames with columns:
-                    variant_id, pca_x, pca_y, t-sne_x, t-sne_y, umap_x, umap_y, pathogenicity_original
+                    variant_id, pca_x, pca_y, t-sne_x, t-sne_y, umap_x, umap_y, labels
         gene_symbol: Gene symbol for the title (e.g., 'BRCA1', 'FBN1')
         figsize: Figure size (width, height)
         save_path: Path to save the combined plot
@@ -200,6 +242,11 @@ def create_all_models_combined_figure(models_data: Dict[str, pd.DataFrame],
     Returns:
         Matplotlib figure object
     """
+    # Check that all DataFrames have required 'labels' column
+    for model_name, df in models_data.items():
+        if 'labels' not in df.columns:
+            raise ValueError(f"DataFrame for model '{model_name}' must have a column named 'labels'")
+    
     methods = ['PCA', 't-SNE', 'UMAP']  # Standard order for titles
     method_columns = ['pca', 't-sne', 'umap']  # Column names in your data (with hyphen for t-sne)
     
@@ -223,7 +270,7 @@ def create_all_models_combined_figure(models_data: Dict[str, pd.DataFrame],
     # Collect all unique labels across all models for consistent legend
     all_labels = set()
     for df in models_data.values():
-        all_labels.update(df['pathogenicity_original'].unique())
+        all_labels.update(df['labels'].unique())
     unique_labels = sorted(all_labels)
     
     # Count known and unknown variants from all data combined
@@ -232,8 +279,8 @@ def create_all_models_combined_figure(models_data: Dict[str, pd.DataFrame],
     known_labels = [label for label in unique_labels if label not in ['query', 'unknown', 'not_yet_reviewed']]
     unknown_labels = [label for label in unique_labels if label in ['query', 'unknown', 'not_yet_reviewed']]
     
-    known_count = first_df['pathogenicity_original'].isin(known_labels).sum()
-    unknown_count = first_df['pathogenicity_original'].isin(unknown_labels).sum()
+    known_count = first_df['labels'].isin(known_labels).sum()
+    unknown_count = first_df['labels'].isin(unknown_labels).sum()
     
     # Create legend elements with special handling for test variants
     legend_elements = []
@@ -268,7 +315,7 @@ def create_all_models_combined_figure(models_data: Dict[str, pd.DataFrame],
                 if valid_mask.any():
                     # Plot each class
                     for label in unique_labels:
-                        mask = (merged_df['pathogenicity_original'] == label) & valid_mask
+                        mask = (merged_df['labels'] == label) & valid_mask
                         if mask.any():
                             color = color_map.get(label, "#888888")
                             
@@ -313,17 +360,18 @@ def create_all_models_combined_figure(models_data: Dict[str, pd.DataFrame],
         axes[row_idx, 0].text(-0.25, 0.5, model_name, rotation=90, ha='center', va='center',
                                transform=axes[row_idx, 0].transAxes, fontsize=20, fontweight='bold')
     
-    # Set main title (increased distance from plots)
+    # Set main title (increased distance from plots) with gene name formatted as bold italic
     if title is None:
         total_variants = known_count + unknown_count
         figure_title = f'Embedding results of {gene_symbol} - {total_variants} variants'
     else:
         figure_title = title
-    fig.suptitle(figure_title, fontsize=28, fontweight='bold', y=0.95)
+    formatted_title = format_gene_name_in_title(figure_title, gene_symbol)
+    fig.suptitle(formatted_title, fontsize=28, fontweight='bold', y=0.95)
     
     # Add legend at the bottom (increased font size)
     fig.legend(handles=legend_elements, loc='lower center', ncol=len(legend_elements), 
-              bbox_to_anchor=(0.5, -0.01), frameon=True, fontsize=18)
+              bbox_to_anchor=(0.5, -0.01), frameon=True, fontsize=22)
     
     plt.tight_layout()
     plt.subplots_adjust(bottom=0.08, top=0.85, left=0.12)

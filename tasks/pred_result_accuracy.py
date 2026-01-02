@@ -11,7 +11,7 @@ sys.path.insert(0, project_root)
 
 if __name__ == "__main__":
     gene_symbol = "FBN1"
-    job_name = "query_1"
+    job_name = "query_2"
                 
     embedding_model_names = [
         "all-mpnet-base-v2", 

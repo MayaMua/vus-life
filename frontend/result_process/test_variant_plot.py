@@ -67,7 +67,8 @@ def load_training_pathogenicity_mapping(gene_symbol: str) -> dict:
 
 def load_training_coordinates(gene_symbol: str, 
                               embedding_model_name: str, 
-                              annotation_method: str) -> pd.DataFrame:
+                              annotation_method: str,
+                              label_mapping: bool = False) -> pd.DataFrame:
     """
     Load training variant coordinates from parquet file.
     
@@ -75,9 +76,10 @@ def load_training_coordinates(gene_symbol: str,
         gene_symbol: Gene symbol (e.g., 'ATM')
         embedding_model_name: Name of the embedding model (e.g., 'all-mpnet-base-v2')
         annotation_method: Annotation method (e.g., 'vep')
+        label_mapping: If True, map pathogenicity to binary labels (pathogenic/benign)
         
     Returns:
-        DataFrame with training variant coordinates
+        DataFrame with training variant coordinates and labels column
     """
     # Construct parquet file path
     parquet_path = Path(project_root) / "data_user" / "training_embedding_results" / "coordinates" / gene_symbol / f"{gene_symbol}_{annotation_method}_coordinates.parquet"
@@ -97,10 +99,29 @@ def load_training_coordinates(gene_symbol: str,
     # Load pathogenicity mapping for training variants
     pathogenicity_map = load_training_pathogenicity_mapping(gene_symbol)
     
-    # Add pathogenicity label for training variants
+    # Add pathogenicity_original for reference
     df_training['pathogenicity_original'] = df_training['variant_id'].map(
         lambda vid: pathogenicity_map.get(vid, 'unknown')
     )
+    
+    # Create labels column based on label_mapping setting
+    if label_mapping:
+        # Map to binary labels: pathogenic or benign
+        def map_to_binary_label(pathogenicity):
+            if pd.isna(pathogenicity):
+                return 'unknown'
+            pathogenicity_str = str(pathogenicity).lower()
+            if 'pathogenic' in pathogenicity_str:
+                return 'pathogenic'
+            elif 'benign' in pathogenicity_str:
+                return 'benign'
+            else:
+                return 'unknown'
+        
+        df_training['labels'] = df_training['pathogenicity_original'].apply(map_to_binary_label)
+    else:
+        # Use pathogenicity_original as labels
+        df_training['labels'] = df_training['pathogenicity_original']
     
     return df_training
 
@@ -108,6 +129,7 @@ def load_training_coordinates(gene_symbol: str,
 def load_query_coordinates(gene_symbol: str, 
                           embedding_model_name: str, 
                           annotation_method: str,
+                          query_index: int,
                           k_value: int = 5) -> pd.DataFrame:
     """
     Load query variant coordinates from prediction_results.json.
@@ -122,7 +144,8 @@ def load_query_coordinates(gene_symbol: str,
         DataFrame with query variant coordinates
     """
     # Construct JSON file path
-    json_path = Path(project_root) / "data_user" / "user_query" / "results" / gene_symbol / f"{embedding_model_name}_{annotation_method}" / "prediction_results.json"
+    json_path = Path(project_root) / "data_user" / "user_query" / "results" / gene_symbol \
+    / f"query_{query_index}" / f"{embedding_model_name}_{annotation_method}" / "prediction_results.json"
     
     if not json_path.exists():
         raise FileNotFoundError(f"Prediction results file not found: {json_path}")
@@ -194,7 +217,7 @@ def load_query_coordinates(gene_symbol: str,
             't-sne_y': tsne_y,
             'umap_x': umap_x,
             'umap_y': umap_y,
-            'pathogenicity_original': 'query'  # Use 'query' label for prediction variants (as per visualization.py)
+            'labels': 'query'  # Use 'query' label for prediction variants (test dataset always uses 'query')
         })
     
     df_query = pd.DataFrame(query_data)
@@ -205,7 +228,9 @@ def load_query_coordinates(gene_symbol: str,
 def plot_variant_embeddings(gene_symbol: str,
                            embedding_model_name: str,
                            annotation_method: str,
+                           query_index: int,
                            k_value: int = 5,
+                           label_mapping: bool = False,
                            save_path: Optional[str] = None,
                            show: bool = False) -> None:
     """
@@ -216,20 +241,21 @@ def plot_variant_embeddings(gene_symbol: str,
         embedding_model_name: Name of the embedding model (e.g., 'all-mpnet-base-v2')
         annotation_method: Annotation method (e.g., 'vep')
         k_value: k value to select specific prediction result (default: 5)
+        label_mapping: If True, map pathogenicity to binary labels (pathogenic/benign) for training data
         save_path: Optional path to save the plot (if None, uses default path)
         show: Whether to display the plot
     """
     print(f"Loading training coordinates for {gene_symbol}...")
-    df_training = load_training_coordinates(gene_symbol, embedding_model_name, annotation_method)
+    df_training = load_training_coordinates(gene_symbol, embedding_model_name, annotation_method, label_mapping=label_mapping)
     print(f"  Loaded {len(df_training)} training variants")
     
     print(f"Loading query coordinates for {gene_symbol}...")
-    df_query = load_query_coordinates(gene_symbol, embedding_model_name, annotation_method, k_value=k_value)
+    df_query = load_query_coordinates(gene_symbol, embedding_model_name, annotation_method, query_index, k_value=k_value)
     print(f"  Loaded {len(df_query)} query variants")
     
     # Combine training and query variants
-    # Select only the columns we need for plotting
-    columns_needed = ['variant_id', 'pca_x', 'pca_y', 't-sne_x', 't-sne_y', 'umap_x', 'umap_y', 'pathogenicity_original']
+    # Select only the columns we need for plotting (use 'labels' instead of 'pathogenicity_original')
+    columns_needed = ['variant_id', 'pca_x', 'pca_y', 't-sne_x', 't-sne_y', 'umap_x', 'umap_y', 'labels']
     
     df_training_plot = df_training[columns_needed].copy()
     df_query_plot = df_query[columns_needed].copy()
@@ -247,7 +273,8 @@ def plot_variant_embeddings(gene_symbol: str,
     # Set default save path if not provided
     if save_path is None:
         save_dir = Path(project_root) / "data_user" / "user_query" / "results" / \
-        gene_symbol / f"{embedding_model_name}_{annotation_method}" / "test_variant_plot"
+        gene_symbol / \
+        f"query_{query_index}" / f"{embedding_model_name}_{annotation_method}" / "test_variant_plot"
         save_dir.mkdir(parents=True, exist_ok=True)
         save_path = save_dir / f"{gene_symbol}_{embedding_model_name}_{annotation_method}_combined_plot.png"
     
@@ -257,6 +284,7 @@ def plot_variant_embeddings(gene_symbol: str,
         merged_df=df_merged,
         figure_title=figure_title,
         model_name=embedding_model_name,
+        gene_symbol=gene_symbol,
         figsize=(18, 8),
         save_path=str(save_path),
         show=show
@@ -268,7 +296,9 @@ def plot_variant_embeddings(gene_symbol: str,
 def plot_all_models_combined(gene_symbol: str,
                              embedding_model_names: List[str],
                              annotation_method: str,
+                             query_index: int,
                              k_value: int = 5,
+                             label_mapping: bool = False,
                              save_path: Optional[str] = None,
                              show: bool = False) -> None:
     """
@@ -279,6 +309,7 @@ def plot_all_models_combined(gene_symbol: str,
         embedding_model_names: List of embedding model names (e.g., ['all-mpnet-base-v2', 'google-embedding', 'MedEmbed-large-v0.1'])
         annotation_method: Annotation method (e.g., 'vep')
         k_value: k value to select specific prediction result (default: 5)
+        label_mapping: If True, map pathogenicity to binary labels (pathogenic/benign) for training data
         save_path: Optional path to save the plot (if None, uses default path)
         show: Whether to display the plot
     """
@@ -289,15 +320,16 @@ def plot_all_models_combined(gene_symbol: str,
         print(f"Loading data for {embedding_model_name}...")
         
         # Load training coordinates
-        df_training = load_training_coordinates(gene_symbol, embedding_model_name, annotation_method)
+        df_training = load_training_coordinates(gene_symbol, embedding_model_name, annotation_method, label_mapping=label_mapping)
         print(f"  Loaded {len(df_training)} training variants")
         
         # Load query coordinates
-        df_query = load_query_coordinates(gene_symbol, embedding_model_name, annotation_method, k_value=k_value)
+        df_query = load_query_coordinates(gene_symbol, embedding_model_name, annotation_method, query_index, k_value=k_value)
         print(f"  Loaded {len(df_query)} query variants")
         
         # Combine training and query variants
-        columns_needed = ['variant_id', 'pca_x', 'pca_y', 't-sne_x', 't-sne_y', 'umap_x', 'umap_y', 'pathogenicity_original']
+        # Select only the columns we need for plotting (use 'labels' instead of 'pathogenicity_original')
+        columns_needed = ['variant_id', 'pca_x', 'pca_y', 't-sne_x', 't-sne_y', 'umap_x', 'umap_y', 'labels']
         
         df_training_plot = df_training[columns_needed].copy()
         df_query_plot = df_query[columns_needed].copy()
@@ -312,15 +344,15 @@ def plot_all_models_combined(gene_symbol: str,
     # Use first model's data for counts (all models should have same variants)
     first_df = list(models_data.values())[0]
     unknown_labels = ['query', 'unknown', 'not_yet_reviewed']
-    known_count = first_df[~first_df['pathogenicity_original'].isin(unknown_labels)].shape[0]
-    unknown_count = first_df[first_df['pathogenicity_original'].isin(unknown_labels)].shape[0]
+    known_count = first_df[~first_df['labels'].isin(unknown_labels)].shape[0]
+    unknown_count = first_df[first_df['labels'].isin(unknown_labels)].shape[0]
     
     # Create title with known and unknown counts
     figure_title = f"Embedding results of {gene_symbol} - {known_count} known + {unknown_count} unknown variants"
     
     # Set default save path if not provided
     if save_path is None:
-        save_dir = Path(project_root) / "data_user" / "user_query" / "results" / gene_symbol / f"{embedding_model_names[0]}_{annotation_method}" / "test_variant_plot"
+        save_dir = Path(project_root) / "data_user" / "user_query" / "results" / gene_symbol / f"query_{query_index}" / f"{embedding_model_names[0]}_{annotation_method}" / "test_variant_plot"
         save_dir.mkdir(parents=True, exist_ok=True)
         save_path = save_dir / f"{gene_symbol}_all_models_combined_plot.png"
     
@@ -345,7 +377,7 @@ if __name__ == "__main__":
     embedding_model_names = ["all-mpnet-base-v2", "google-embedding", "MedEmbed-large-v0.1"]
     k_value = 5
     annotation_method = "vep"
-
+    query_index = 2
     # Option 1: Plot each model separately (original behavior)
     # for embedding_model_name in embedding_model_names:
     #     plot_variant_embeddings(
@@ -361,7 +393,9 @@ if __name__ == "__main__":
         gene_symbol=gene_symbol,
         embedding_model_names=embedding_model_names,
         annotation_method=annotation_method,
+        query_index=query_index,
         k_value=k_value,
+        label_mapping=True,
         show=False
     )
 
