@@ -68,6 +68,7 @@ def _get_paths(
         PROJECT_ROOT
         / "data_user"
         / "user_query"
+        / "annotation_analysis"
         / "results"
         / gene_symbol
         / task_name
@@ -104,7 +105,7 @@ def _get_paths(
         / "inputs"
         / gene_symbol
         / task_name
-        / f"{gene_symbol}_test.csv"
+        / f"{gene_symbol}_test_protein_parsed.csv"
     )
 
     # Output directory for plots and concatenated data
@@ -328,6 +329,14 @@ def load_and_merge_labels(
         logger.warning(f"Label CSV missing columns: {missing}")
         return df_variants
 
+    # Filter to only rows that have HCD information (non-empty, non-null)
+    df_labels = df_labels[df_labels["HCD"].notna() & (df_labels["HCD"].astype(str).str.strip() != "")].copy()
+    if df_labels.empty:
+        logger.warning("No rows with HCD information found in label CSV.")
+        return df_variants
+
+    logger.info(f"Filtered label CSV to {len(df_labels)} rows with HCD information.")
+
     # Ensure consistent dtypes for merge keys
     for col in ["chromosome", "ref_allele", "alt_allele"]:
         df_variants[col] = df_variants[col].astype(str)
@@ -337,10 +346,11 @@ def load_and_merge_labels(
     df_labels["position"] = pd.to_numeric(df_labels["position"], errors="coerce").astype("Int64")
 
     merge_keys = ["chromosome", "position", "ref_allele", "alt_allele"]
+    # Use inner join to only keep variants that have HCD information
     df_merged = df_variants.merge(
         df_labels[merge_keys + ["HCD"]],
         on=merge_keys,
-        how="left",
+        how="inner",
     )
 
     # Map HCD to two-category group

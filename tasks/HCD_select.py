@@ -52,3 +52,21 @@ for csv_file, label in zip(csv_files, labels):
     df_combined.to_csv(os.path.join(output_folder, f"{base_name}.csv"), index=False)
 
 print("\n--- All Done ---")
+
+
+"""
+csv_files = [
+    "Aortic Dilation.csv",
+    "Both Aortic Dilation and Mitral Valve Prolapse.csv",
+    "Mitral Valve Regurgitation Prolapse.csv",
+    "No Cardiovascular Involvement.csv"
+]
+
+labels = {
+    "AD",
+    "AD_MVP",
+    "MVP",
+    "NCI"
+}
+
+"""
