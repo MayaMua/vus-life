@@ -16,6 +16,13 @@ def get_reference_base(ac, pos):
         print(f"Error fetching base: {e}")
         return "N"
 
+def reverse_complement(seq):
+    """Get reverse complement of a DNA sequence"""
+    complement = {'A': 'T', 'T': 'A', 'G': 'C', 'C': 'G', 
+                  'N': 'N', 'a': 't', 't': 'a', 'g': 'c', 'c': 'g',
+                  'n': 'n'}
+    return ''.join(complement.get(base, base) for base in reversed(seq))
+
 def hgvs_g_to_vcf(hgvs_g_str):
     if not hgvs_g_str or pd.isna(hgvs_g_str):
         return None
@@ -71,6 +78,48 @@ def hgvs_g_to_vcf(hgvs_g_str):
             ref = edit.ref
             alt = edit.alt
             
+        # --- 情况 E: DelIns (缺失插入) ---
+        elif edit.type == 'delins':
+            # VCF format: deletion followed by insertion at the same position
+            start = pos_hgvs.start.base
+            end = pos_hgvs.end.base
+            
+            # Anchor point is set before the deletion starts
+            pos_vcf = start - 1
+            anchor_base = get_reference_base(ac, pos_vcf)
+            
+            # Get the deleted sequence
+            deleted_seq = fetch_seq(ac, start_i=start-1, end_i=end)
+            
+            # Get the inserted sequence
+            inserted_seq = edit.alt if edit.alt else ""
+            
+            # VCF REF: anchor + deleted sequence
+            ref = anchor_base + deleted_seq
+            # VCF ALT: anchor + inserted sequence
+            alt = anchor_base + inserted_seq
+            
+        # --- 情况 F: Inv (倒位) ---
+        elif edit.type == 'inv':
+            # VCF format: inversion is represented as deletion followed by insertion of reverse complement
+            start = pos_hgvs.start.base
+            end = pos_hgvs.end.base
+            
+            # Anchor point is set before the inversion starts
+            pos_vcf = start - 1
+            anchor_base = get_reference_base(ac, pos_vcf)
+            
+            # Get the original sequence that will be inverted
+            original_seq = fetch_seq(ac, start_i=start-1, end_i=end)
+            
+            # Get the reverse complement sequence
+            inverted_seq = reverse_complement(original_seq)
+            
+            # VCF REF: anchor + original sequence
+            ref = anchor_base + original_seq
+            # VCF ALT: anchor + reverse complement sequence
+            alt = anchor_base + inverted_seq
+            
         else:
             print(f"Unsupported type: {edit.type}")
             return None
@@ -89,9 +138,15 @@ def hgvs_g_to_vcf(hgvs_g_str):
 if __name__ == "__main__":
     # 测试
     hgvs_list = [
-        "NC_000015.10:g.48487139dup",       # 你的报错案例 (Dup)
-        "NC_000016.10:g.23607966_23607967insA", # 之前的案例 (Ins)
-        "NC_000015.10:g.48644723del"
+        # "NC_000015.10:g.48487139dup",       # 你的报错案例 (Dup)
+        # "NC_000016.10:g.23607966_23607967insA", # 之前的案例 (Ins)
+        # "NC_000015.10:g.48644723del",
+        # "NC_000015.10:g.48644723delinsA",
+        # "NC_000017.11:g.43094464_43094465inv",
+        # "NC_000017.11:g.43093295_43093296inv",
+        # "NC_000013.11:g.32355073_32355074inv"
+        "NC_000016.10:g.23603625_23603626del"
+
     ]
 
     for g in hgvs_list:

@@ -365,11 +365,11 @@ if __name__ == "__main__":
     # Parse metadata.json to get all training variants
     # Note: Metadata has been moved to data_user/training_embedding_results/metadata/{gene_symbol}/metadata.json
     gene_symbols = [
-                # "BRCA2", 
+                "BRCA2", 
                 # "BRCA1", 
                 # "ATM",
                 # "PALB2", 
-                "FBN1" 
+                # "FBN1" 
                 ]
     embedding_model_names = [
         "all-mpnet-base-v2", 
@@ -381,9 +381,9 @@ if __name__ == "__main__":
     # ]
     annotation_method = "vep"
     k_value = 5  # Select k=5 for prediction results
-    job_name = "query_2"
+    job_name = "query_0"
     append_existing_variants = False
-    check_clinvar = True
+    check_clinvar = False
     load_test_data_metadata = True
     
     for gene_symbol in gene_symbols:

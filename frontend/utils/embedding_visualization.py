@@ -37,27 +37,20 @@ COMPREHENSIVE_PATHOGENICITY_COLORS = {
     'query': '#00FF00'                      # Dark red for test variants (query)
 }
 
-def format_gene_name_in_title(title: str, gene_symbol: Optional[str] = None) -> str:
+def format_gene_name_in_title(fig: plt.Figure, title: str, gene_symbol: Optional[str] = None, 
+                              y_pos: float = 0.98, fontsize: int = 28) -> None:
     """
-    Format gene name in title to be bold and italic using LaTeX formatting.
+    Draw title with gene name formatted as bold italic using direct text positioning.
+    Calculates positions for each word segment and draws them separately.
     
     Args:
+        fig: Matplotlib figure object to draw on
         title: The title string that may contain a gene symbol
         gene_symbol: Optional gene symbol to format. If None, tries to extract from title.
-        
-    Returns:
-        Title with gene name formatted as bold italic using LaTeX math mode
+        y_pos: Y position for the title (default 0.98, near top)
+        fontsize: Font size for the title (default 28)
     """
-    if gene_symbol:
-        # Replace gene symbol with bold italic version using LaTeX
-        # Use \boldsymbol{\mathit{...}} for bold italic
-        # Use lambda to avoid regex escape issues with backslashes
-        formatted_gene = f'$\\boldsymbol{{\\mathit{{{gene_symbol}}}}}$'
-        # Replace all occurrences of the gene symbol (case-insensitive)
-        pattern = re.compile(re.escape(gene_symbol), re.IGNORECASE)
-        # Use lambda to return the replacement string without regex interpretation
-        return pattern.sub(lambda m: formatted_gene, title)
-    else:
+    if not gene_symbol:
         # Try to extract common gene patterns (uppercase letters and numbers)
         # Pattern for gene symbols (typically 2-10 uppercase letters/numbers)
         gene_pattern = r'\b([A-Z][A-Z0-9]{1,9})\b'
@@ -65,11 +58,55 @@ def format_gene_name_in_title(title: str, gene_symbol: Optional[str] = None) -> 
         if matches:
             # Use the first match (likely the gene symbol)
             gene_symbol = matches[0]
-            formatted_gene = f'$\\boldsymbol{{\\mathit{{{gene_symbol}}}}}$'
-            pattern = re.compile(re.escape(gene_symbol), re.IGNORECASE)
-            # Use lambda to return the replacement string without regex interpretation
-            return pattern.sub(lambda m: formatted_gene, title)
-    return title
+    
+    if gene_symbol:
+        # Split title into parts: prefix, gene name, suffix
+        pattern = re.compile(re.escape(gene_symbol), re.IGNORECASE)
+        match = pattern.search(title)
+        if match:
+            prefix = title[:match.start()].strip()
+            gene_name = match.group()
+            suffix = title[match.end():].strip()
+            
+            # Use approximate character width for positioning (rough estimate)
+            # Average character width in points for fontsize 28 is approximately 0.01-0.015 of figure width
+            char_width = 0.012  # Approximate width per character as fraction of figure width
+            
+            # Add extra spacing between prefix and gene name (only if prefix exists)
+            spacing_before = 0.015 if prefix else 0.0  # Additional space between prefix and gene name
+            # Add extra spacing between gene name and suffix (only if suffix exists)
+            spacing_after = 0.025 if suffix else 0.0  # Additional space between gene name and suffix (increased for hyphen)
+            
+            prefix_width = len(prefix) * char_width if prefix else 0
+            gene_width = len(gene_name) * char_width * 0.9  # Italic text slightly narrower
+            suffix_width = len(suffix) * char_width if suffix else 0
+            
+            total_width = prefix_width + spacing_before + gene_width + spacing_after + suffix_width
+            start_x = 0.5 - total_width / 2
+            
+            # Create text elements with calculated positions
+            current_x = start_x
+            if prefix:
+                fig.text(current_x + prefix_width / 2, y_pos, prefix, fontsize=fontsize, fontweight='bold',
+                        ha='center', va='top', transform=fig.transFigure)
+                current_x += prefix_width + spacing_before
+            
+            fig.text(current_x + gene_width / 2, y_pos, gene_name, 
+                    fontsize=fontsize, fontweight='bold', style='italic', ha='center', va='top', 
+                    transform=fig.transFigure)
+            current_x += gene_width + spacing_after
+            
+            if suffix:
+                fig.text(current_x + suffix_width / 2, y_pos, suffix, 
+                        fontsize=fontsize, fontweight='bold', ha='center', va='top', transform=fig.transFigure)
+        else:
+            # Gene symbol not found in title, just draw the whole title
+            fig.text(0.5, y_pos, title, fontsize=fontsize, fontweight='bold',
+                    ha='center', va='top', transform=fig.transFigure)
+    else:
+        # No gene symbol, just draw the whole title
+        fig.text(0.5, y_pos, title, fontsize=fontsize, fontweight='bold',
+                ha='center', va='top', transform=fig.transFigure)
 
 def create_combined_embedding_figure(merged_df: pd.DataFrame, 
                                     figure_title: str,
@@ -142,6 +179,15 @@ def create_combined_embedding_figure(merged_df: pd.DataFrame,
         if x_col in merged_df.columns and y_col in merged_df.columns:
             # Filter out NaN values
             valid_mask = merged_df[x_col].notna() & merged_df[y_col].notna()
+            
+            # Debug: Print counts for each label
+            if i == 0:  # Only print for first method
+                print(f"\nDebug info for {method_title}:")
+                for label in unique_labels:
+                    total_count = (merged_df['labels'] == label).sum()
+                    valid_count = ((merged_df['labels'] == label) & valid_mask).sum()
+                    print(f"  {label}: {valid_count}/{total_count} variants with valid coordinates")
+            
             if valid_mask.any():
                 # Plot each class
                 for label in unique_labels:
@@ -156,9 +202,9 @@ def create_combined_embedding_figure(merged_df: pd.DataFrame,
                                       c=color, alpha=0.9, s=50, marker='D', 
                                       edgecolors='black', linewidths=1.0)
                         else:
-                            # Use circle markers for training variants
+                            # Use circle markers for training variants (increased size for visibility)
                             ax.scatter(merged_df.loc[mask, x_col], merged_df.loc[mask, y_col], 
-                                      c=color, alpha=0.7, s=15, marker='o')
+                                      c=color, alpha=0.8, s=25, marker='o', edgecolors='none')
                 
                 # Set labels and grid
                 ax.set_xlabel('Component 1', fontsize=14)
@@ -181,8 +227,7 @@ def create_combined_embedding_figure(merged_df: pd.DataFrame,
             ax.set_title(f'{method_title}', fontsize=18, fontweight='bold', pad=20)
     
     # Set main title with gene name formatted as bold italic
-    formatted_title = format_gene_name_in_title(figure_title, gene_symbol)
-    fig.suptitle(formatted_title, fontsize=24, fontweight='bold', y=0.98)
+    format_gene_name_in_title(fig, figure_title, gene_symbol, y_pos=0.98, fontsize=24)
     
     # Add model name on the left side of the figure (vertical text)
     if model_name:
@@ -312,6 +357,15 @@ def create_all_models_combined_figure(models_data: Dict[str, pd.DataFrame],
             if x_col in merged_df.columns and y_col in merged_df.columns:
                 # Filter out NaN values
                 valid_mask = merged_df[x_col].notna() & merged_df[y_col].notna()
+                
+                # Debug: Print counts for each label
+                if row_idx == 0 and col_idx == 0:  # Only print once per model
+                    print(f"\nDebug info for {model_name} - {method_title}:")
+                    for label in unique_labels:
+                        total_count = (merged_df['labels'] == label).sum()
+                        valid_count = ((merged_df['labels'] == label) & valid_mask).sum()
+                        print(f"  {label}: {valid_count}/{total_count} variants with valid coordinates")
+                
                 if valid_mask.any():
                     # Plot each class
                     for label in unique_labels:
@@ -326,9 +380,9 @@ def create_all_models_combined_figure(models_data: Dict[str, pd.DataFrame],
                                           c=color, alpha=0.9, s=50, marker='D', 
                                           edgecolors='black', linewidths=1.0)
                             else:
-                                # Use circle markers for training variants
+                                # Use circle markers for training variants (increased size for visibility)
                                 ax.scatter(merged_df.loc[mask, x_col], merged_df.loc[mask, y_col], 
-                                          c=color, alpha=0.7, s=15, marker='o')
+                                          c=color, alpha=0.8, s=25, marker='o', edgecolors='none')
                     
                     # Set labels and grid
                     ax.set_xlabel('Component 1', fontsize=14)
@@ -363,11 +417,10 @@ def create_all_models_combined_figure(models_data: Dict[str, pd.DataFrame],
     # Set main title (increased distance from plots) with gene name formatted as bold italic
     if title is None:
         total_variants = known_count + unknown_count
-        figure_title = f'Embedding results of {gene_symbol} - {total_variants} variants'
+        figure_title = f'Embedding results of {gene_symbol} - {known_count} known + {unknown_count} unknown variants'
     else:
         figure_title = title
-    formatted_title = format_gene_name_in_title(figure_title, gene_symbol)
-    fig.suptitle(formatted_title, fontsize=28, fontweight='bold', y=0.95)
+    format_gene_name_in_title(fig, figure_title, gene_symbol, y_pos=0.95, fontsize=28)
     
     # Add legend at the bottom (increased font size)
     fig.legend(handles=legend_elements, loc='lower center', ncol=len(legend_elements), 

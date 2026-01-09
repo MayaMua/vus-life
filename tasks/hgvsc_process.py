@@ -67,7 +67,7 @@ def process_single_variant(c_hgvs, transcript_accession, genomic_accession):
     
     return pd.Series(result)
 
-def process_csv_file(csv_file_path, transcript_accession, genomic_accession, output_dir):
+def process_csv_file(csv_file_path, transcript_accession, genomic_accession, output_dir, c_annotation_column_name):
     """
     Process a single CSV file: convert cDNA HGVS to genomic HGVS and VCF format.
     
@@ -79,11 +79,7 @@ def process_csv_file(csv_file_path, transcript_accession, genomic_accession, out
     """
     # Load the CSV file
     df = pd.read_csv(csv_file_path)
-    
-    # Check if 'cDNA Nomenclature' column exists
-    if 'cDNA Nomenclature' not in df.columns:
-        print(f"Warning: 'cDNA Nomenclature' column not found in {csv_file_path}. Skipping.")
-        return
+
     
     # Get the base filename without extension
     base_name = Path(csv_file_path).stem
@@ -92,7 +88,7 @@ def process_csv_file(csv_file_path, transcript_accession, genomic_accession, out
     tqdm.pandas(desc=f"Processing {base_name}")
     
     # Process each variant: cDNA -> genomic HGVS -> VCF
-    result_df = df['cDNA Nomenclature'].progress_apply(
+    result_df = df[c_annotation_column_name].progress_apply(
         lambda x: process_single_variant(x, transcript_accession, genomic_accession)
     )
     
@@ -117,15 +113,16 @@ def process_csv_file(csv_file_path, transcript_accession, genomic_accession, out
 def main():
     """Main function to process all CSV files in the directory."""
     # Directory containing CSV files
-    input_dir = "data_local_raw/FBN1_phenotypes_v2"
-    output_dir = "data_user/user_query/inputs/FBN1/query_1"
+    input_dir = "data_user/user_query/inputs/FBN1/query_3"
+    output_dir = "data_user/user_query/inputs/FBN1/query_3"
+    c_annotation_column_name = "cNomen"
     
     # Create output directory if it doesn't exist
     os.makedirs(output_dir, exist_ok=True)
     
     # Get all CSV files in the directory
-    # csv_files = list(Path(input_dir).glob("*.csv"))
-    csv_files = ["data_local_raw/FBN1_phenotypes_v2/Both Aortic Dilation and Mitral Valve Prolapse.csv"]
+    csv_files = list(Path(input_dir).glob("*.csv"))
+    # csv_files = ["data_local_raw/FBN1_phenotypes_v2/Both Aortic Dilation and Mitral Valve Prolapse.csv"]
     
     if not csv_files:
         print(f"No CSV files found in {input_dir}")
@@ -145,7 +142,8 @@ def main():
                 str(csv_path),
                 TRANSCRIPT_ACCESSION,
                 GENOMIC_ACCESSION,
-                output_dir
+                output_dir,
+                c_annotation_column_name
             )
         except Exception as e:
             print(f"Error processing {csv_path.name}: {e}")

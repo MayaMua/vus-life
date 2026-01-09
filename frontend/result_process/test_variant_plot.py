@@ -96,6 +96,17 @@ def load_training_coordinates(gene_symbol: str,
     if df_training.empty:
         raise ValueError(f"No coordinates found for model: {embedding_model_name}")
     
+    # Debug: Check what columns exist and if coordinates are populated
+    print(f"  Training DataFrame shape: {df_training.shape}")
+    print(f"  Training DataFrame columns: {list(df_training.columns)}")
+    coord_cols = ['pca_x', 'pca_y', 't-sne_x', 't-sne_y', 'umap_x', 'umap_y']
+    for col in coord_cols:
+        if col in df_training.columns:
+            non_null_count = df_training[col].notna().sum()
+            print(f"  {col}: {non_null_count}/{len(df_training)} non-null values")
+        else:
+            print(f"  {col}: column not found!")
+    
     # Load pathogenicity mapping for training variants
     pathogenicity_map = load_training_pathogenicity_mapping(gene_symbol)
     
@@ -129,7 +140,7 @@ def load_training_coordinates(gene_symbol: str,
 def load_query_coordinates(gene_symbol: str, 
                           embedding_model_name: str, 
                           annotation_method: str,
-                          query_index: int,
+                          job_name: str,
                           k_value: int = 5) -> pd.DataFrame:
     """
     Load query variant coordinates from prediction_results.json.
@@ -145,7 +156,7 @@ def load_query_coordinates(gene_symbol: str,
     """
     # Construct JSON file path
     json_path = Path(project_root) / "data_user" / "user_query" / "results" / gene_symbol \
-    / f"query_{query_index}" / f"{embedding_model_name}_{annotation_method}" / "prediction_results.json"
+    / job_name / f"{embedding_model_name}_{annotation_method}" / "prediction_results.json"
     
     if not json_path.exists():
         raise FileNotFoundError(f"Prediction results file not found: {json_path}")
@@ -255,9 +266,22 @@ def plot_variant_embeddings(gene_symbol: str,
     
     # Combine training and query variants
     # Select only the columns we need for plotting (use 'labels' instead of 'pathogenicity_original')
+    # Handle potential column name variations (t-sne vs tsne)
     columns_needed = ['variant_id', 'pca_x', 'pca_y', 't-sne_x', 't-sne_y', 'umap_x', 'umap_y', 'labels']
     
-    df_training_plot = df_training[columns_needed].copy()
+    # Check for alternative column names and normalize
+    if 't-sne_x' not in df_training.columns and 'tsne_x' in df_training.columns:
+        # Rename tsne columns to t-sne for consistency
+        df_training = df_training.rename(columns={'tsne_x': 't-sne_x', 'tsne_y': 't-sne_y'})
+        print(f"  Renamed tsne columns to t-sne for consistency")
+    
+    # Check which columns are actually available
+    available_cols = [col for col in columns_needed if col in df_training.columns]
+    missing_cols = [col for col in columns_needed if col not in df_training.columns]
+    if missing_cols:
+        print(f"  Warning: Missing columns in training data: {missing_cols}")
+    
+    df_training_plot = df_training[available_cols].copy() if available_cols else df_training.copy()
     df_query_plot = df_query[columns_needed].copy()
     
     # Combine dataframes
@@ -273,8 +297,7 @@ def plot_variant_embeddings(gene_symbol: str,
     # Set default save path if not provided
     if save_path is None:
         save_dir = Path(project_root) / "data_user" / "user_query" / "results" / \
-        gene_symbol / \
-        f"query_{query_index}" / f"{embedding_model_name}_{annotation_method}" / "test_variant_plot"
+        gene_symbol / job_name / f"{embedding_model_name}_{annotation_method}" / "test_variant_plot"
         save_dir.mkdir(parents=True, exist_ok=True)
         save_path = save_dir / f"{gene_symbol}_{embedding_model_name}_{annotation_method}_combined_plot.png"
     
@@ -296,7 +319,7 @@ def plot_variant_embeddings(gene_symbol: str,
 def plot_all_models_combined(gene_symbol: str,
                              embedding_model_names: List[str],
                              annotation_method: str,
-                             query_index: int,
+                             job_name: str,
                              k_value: int = 5,
                              label_mapping: bool = False,
                              save_path: Optional[str] = None,
@@ -329,16 +352,46 @@ def plot_all_models_combined(gene_symbol: str,
         
         # Combine training and query variants
         # Select only the columns we need for plotting (use 'labels' instead of 'pathogenicity_original')
+        # Handle potential column name variations (t-sne vs tsne)
         columns_needed = ['variant_id', 'pca_x', 'pca_y', 't-sne_x', 't-sne_y', 'umap_x', 'umap_y', 'labels']
         
-        df_training_plot = df_training[columns_needed].copy()
+        # Check for alternative column names and normalize
+        if 't-sne_x' not in df_training.columns and 'tsne_x' in df_training.columns:
+            # Rename tsne columns to t-sne for consistency
+            df_training = df_training.rename(columns={'tsne_x': 't-sne_x', 'tsne_y': 't-sne_y'})
+            print(f"  Renamed tsne columns to t-sne for consistency")
+        
+        # Check which columns are actually available
+        available_cols = [col for col in columns_needed if col in df_training.columns]
+        missing_cols = [col for col in columns_needed if col not in df_training.columns]
+        if missing_cols:
+            print(f"  Warning: Missing columns in training data: {missing_cols}")
+        
+        df_training_plot = df_training[available_cols].copy() if available_cols else df_training.copy()
         df_query_plot = df_query[columns_needed].copy()
         
         # Combine dataframes
         df_merged = pd.concat([df_training_plot, df_query_plot], ignore_index=True)
         models_data[embedding_model_name] = df_merged
         
+        # Debug: Print label counts
+        unknown_labels = ['query', 'unknown', 'not_yet_reviewed']
+        known_count = df_merged[~df_merged['labels'].isin(unknown_labels)].shape[0]
+        unknown_count = df_merged[df_merged['labels'].isin(unknown_labels)].shape[0]
+        
         print(f"  Total variants for {embedding_model_name}: {len(df_merged)}")
+        print(f"    Known variants: {known_count}")
+        print(f"    Unknown variants: {unknown_count}")
+        
+        # Debug: Check for valid coordinates
+        for method in ['pca', 't-sne', 'umap']:
+            x_col = f"{method}_x"
+            y_col = f"{method}_y"
+            if x_col in df_merged.columns and y_col in df_merged.columns:
+                valid_mask = df_merged[x_col].notna() & df_merged[y_col].notna()
+                known_valid = ((~df_merged['labels'].isin(unknown_labels)) & valid_mask).sum()
+                unknown_valid = (df_merged['labels'].isin(unknown_labels) & valid_mask).sum()
+                print(f"    {method.upper()}: {known_valid} known + {unknown_valid} unknown with valid coordinates")
     
     # Calculate known and unknown variant counts
     # Use first model's data for counts (all models should have same variants)
@@ -348,7 +401,7 @@ def plot_all_models_combined(gene_symbol: str,
     unknown_count = first_df[first_df['labels'].isin(unknown_labels)].shape[0]
     
     # Create title with known and unknown counts
-    figure_title = f"Embedding results of {gene_symbol} - {known_count} known + {unknown_count} unknown variants"
+    figure_title = "Embedding results of \textit{{{gene_symbol}}} - {known_count} known + {unknown_count} unknown variants"
     
     # Set default save path if not provided
     if save_path is None:
@@ -365,7 +418,6 @@ def plot_all_models_combined(gene_symbol: str,
         figsize=(20, 18),
         save_path=str(save_path),
         show=show,
-        title=figure_title
     )
     
     print(f"✓ Combined plot saved to: {save_path}")
@@ -373,11 +425,11 @@ def plot_all_models_combined(gene_symbol: str,
 
 if __name__ == "__main__":
     # Example usage
-    gene_symbol = "FBN1"
+    gene_symbol = "BRCA2"
     embedding_model_names = ["all-mpnet-base-v2", "google-embedding", "MedEmbed-large-v0.1"]
     k_value = 5
     annotation_method = "vep"
-    query_index = 2
+    job_name = "query_0"
     # Option 1: Plot each model separately (original behavior)
     # for embedding_model_name in embedding_model_names:
     #     plot_variant_embeddings(
@@ -393,9 +445,17 @@ if __name__ == "__main__":
         gene_symbol=gene_symbol,
         embedding_model_names=embedding_model_names,
         annotation_method=annotation_method,
-        query_index=query_index,
+        job_name=job_name,
         k_value=k_value,
         label_mapping=True,
         show=False
     )
+
+    # plot_training_variant_embeddings(
+    #     gene_symbol=gene_symbol,
+    #     embedding_model_names=embedding_model_names,
+    #     annotation_method=annotation_method,
+    #     label_mapping=False,
+    #     show=False
+    # )
 

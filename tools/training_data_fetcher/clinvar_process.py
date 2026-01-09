@@ -488,7 +488,7 @@ def main():
     """
     Main function to process ClinVar data.
     """
-    input_file_path = "atm_clinvar_result.txt"
+    input_file_path = "data_local_raw/clinvar_raw/palb2_clinvar_result.txt"
     clinvar_processor = ClinVarProcessor(input_file_path)
     processed_variants_dataframe = clinvar_processor.get_processed_variants_dataframe()
     print(processed_variants_dataframe['df'].head())
