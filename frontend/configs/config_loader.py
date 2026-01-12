@@ -9,6 +9,9 @@ import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+# Import settings manager for user-configurable data folder
+from frontend.configs.user_settings_manager import get_settings_manager
+
 # =============================================================================
 # Load Basic Config and Settings
 # =============================================================================
@@ -57,11 +60,14 @@ def get_log_dir(config: Dict[str, Any]) -> str:
 # Data User Paths 
 # =============================================================================
 
-def get_user_data_base_dir(config: Dict[str, Any]) -> str:
+def get_user_data_base_dir(config: Dict[str, Any]) -> Path:
     """
     Get the data user base directory from the configuration.
+    Uses user settings manager to get the configured data folder path.
+    This ensures compatibility with PyInstaller and user-configured paths.
     """
-    return Path(config['paths']['user']['base_dir'])
+    settings_manager = get_settings_manager()
+    return settings_manager.get_data_folder_path()
 
 def get_user_training_coordinates_dir(config: Dict[str, Any], gene_symbol: str = None) -> Path:
     """

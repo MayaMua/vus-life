@@ -1,4 +1,0 @@
-# API Configuration
-# Copy this file to .env and update the API_BASE_URL
-API_BASE_URL=http://localhost:8000
-
