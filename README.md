@@ -15,8 +15,11 @@ Ready to see the magic in action?
 ------
 
 🚀 Want to Try It Yourself?
-Excited to take VUS.LIFE for a spin? A user-friendly desktop app is coming soon!
-To be the first to know when it drops, click the "Watch" button at the top of this page. You'll get a notification the moment it's released!
+Excited to take VUS.LIFE for a spin? A user-friendly desktop app is coming soon! You can try a beta version via: 👉 **[vus-life-beta](http://98.92.58.214:8501/)**.
+
+📖 **[Read the Web App User Guide](WEB_APP_GUIDE.md)** for detailed instructions on how to use the beta version.
+
+To be the first to know when the desktop app drops, click the "Watch" button at the top of this page. You'll get a notification the moment it's released!
 
 ------
 
@@ -31,3 +34,4 @@ For a deep dive into how it all works, you can read our full paper [Link](https:
 U.S. Provisional Patent Application No. 63/821,249, filed June 10, 2025.
 
 
+### Acknowledgments
