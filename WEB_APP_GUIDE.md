@@ -51,8 +51,6 @@ Test data files are available for **BRCA1**, **BRCA2**, and **FBN1** genes.
 
 ### Important Notes:
 
-- ⚠️ **Manual input is currently experiencing a bug and is not functional**
-- Please use **file upload** instead
 - The provided files contain hundreds of variants
 - **Recommended**: Select approximately 10 variants and save them to a `.txt` file for testing
 
