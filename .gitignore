@@ -180,9 +180,9 @@ cython_debug/
 .cursorignore
 .cursorindexingignore
 
-data_*
+
 *.parquet
-*.csv
 backup/
 *.DS_Store
 
+!data_local/.cache/
