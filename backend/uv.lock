@@ -245,7 +245,7 @@ requires-dist = [
     { name = "pandas", specifier = ">=3.0.0" },
     { name = "psycopg2-binary", specifier = ">=2.9.11" },
     { name = "requests", specifier = ">=2.32.5" },
-    { name = "tqdm" },
+    { name = "tqdm", specifier = ">=4.67.0" },
 ]
 
 [[package]]

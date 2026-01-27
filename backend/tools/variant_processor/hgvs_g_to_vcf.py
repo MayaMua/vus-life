@@ -5,18 +5,25 @@ import hgvs.dataproviders.uta
 from hgvs.extras.babelfish import Babelfish
 import socket
 from functools import lru_cache
-from diskcache import Cache
 from pathlib import Path
+import sys
+import os
+
+# Add backend/utils to path for importing the cache decorator
+backend_path = Path(__file__).resolve().parent.parent.parent
+if str(backend_path) not in sys.path:
+    sys.path.insert(0, str(backend_path))
+
+# Import configuration and disk cache decorator
+from utils.config_loader import get_cache_dir, get_config
+from utils.disk_cache_decorator import disk_cache_skip_none
 
 # Initialize the HGVS parser (no database connection required for parsing)
 parser = hgvs.parser.Parser()
 
-# Set socket timeout to 30 seconds
-socket.setdefaulttimeout(30)
-
-# Initialize simple disk cache
-cache_dir = Path.home() / ".cache" / "hgvs_vcf"
-disk_cache = Cache(str(cache_dir))
+# Set socket timeout from config
+config = get_config()
+socket.setdefaulttimeout(config.get('network.socket_timeout', 30))
 
 # Initialize data provider (connect to UTA database)
 hdp = hgvs.dataproviders.uta.connect()
@@ -80,11 +87,12 @@ def reverse_complement(seq):
                   'n': 'n'}
     return ''.join(complement.get(base, base) for base in reversed(seq))
 
-@disk_cache.memoize()
+@disk_cache_skip_none(str(get_cache_dir('hgvs_vcf_cache')))
 def hgvs_g_to_vcf(hgvs_g_str):
     """
     Convert an HGVS g. variant string to its equivalent VCF representation.
     Results are cached to disk for fast retrieval on subsequent runs.
+    Only successful conversions are cached - failures will be retried.
 
     Args:
         hgvs_g_str (str): Genomic-level HGVS string (e.g., 'NC_000001.11:g.23603625_23603626del')

@@ -1,0 +1,33 @@
+# Configuration file for variant research project
+# All paths are relative to the project root directory
+
+[paths]
+# Data directories
+data_root = "data_local"
+raw_data = "data_local/raw"
+processed_data = "data_local/processed"
+
+# Cache directories
+cache_root = "data_local/.cache"
+hgvs_vcf_cache = "data_local/.cache/hgvs_vcf"
+mutalyzer_cache = "data_local/.cache/mutalyzer_cdna_to_genomic"
+
+# Input/output paths for specific datasets
+[paths.clinvar]
+raw = "data_local/raw/clinvar"
+processed = "data_local/processed/clinvar"
+
+[paths.lovd]
+raw = "data_local/raw/LOVD"
+processed = "data_local/processed/lovd"
+
+# API settings (optional, for future use)
+[api]
+# Mutalyzer API settings
+mutalyzer_timeout = 30
+mutalyzer_base_url = "https://mutalyzer.nl/api"
+
+# Network settings
+[network]
+socket_timeout = 30
+max_retries = 3
