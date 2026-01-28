@@ -48,35 +48,81 @@ def convert_cdna_to_genomic_hgvs_mutalyzer(transcript_accession, cdna_hgvs_strin
     encoded_variant = requests.utils.quote(combined_desc, safe='()/:*+')
     url = f"{MUTALYZER_NORMALIZE_URL}/{encoded_variant}"
 
-    response = requests.get(url, timeout=30)
-    if response.status_code == 429:
-        # Rate limited
-        time.sleep(5)
-        return None
-    if response.status_code != 200:
-        # API error
-        return None
+    # Retry logic with exponential backoff
+    max_retries = 3
+    base_timeout = 30
+    base_delay = 2
+    
+    for attempt in range(max_retries):
+        try:
+            # Increase timeout slightly on retries
+            timeout = base_timeout + (attempt * 10)
+            response = requests.get(url, timeout=timeout)
+            
+            if response.status_code == 429:
+                # Rate limited - wait longer before returning
+                wait_time = base_delay * (2 ** attempt) + 5
+                logging.warning(f"Rate limited (429), waiting {wait_time}s before retry")
+                time.sleep(wait_time)
+                if attempt < max_retries - 1:
+                    continue
+                return None
+                
+            if response.status_code != 200:
+                # API error - log and return None
+                logging.warning(f"API returned status {response.status_code} for {encoded_variant}")
+                return None
 
-    data = response.json()
+            data = response.json()
 
-    # Prefer exact genomic equivalent when present
-    eq = data.get("equivalent_descriptions", {})
-    g_list = eq.get("g") or []
-    if isinstance(g_list, list) and len(g_list) > 0:
-        first_g = g_list[0]
-        if isinstance(first_g, dict):
-            g_desc = first_g.get("description")
+            # Prefer exact genomic equivalent when present
+            eq = data.get("equivalent_descriptions", {})
+            g_list = eq.get("g") or []
+            if isinstance(g_list, list) and len(g_list) > 0:
+                first_g = g_list[0]
+                if isinstance(first_g, dict):
+                    g_desc = first_g.get("description")
+                    if g_desc and ":g." in g_desc:
+                        return g_desc
+                elif isinstance(first_g, str) and ":g." in first_g:
+                    return first_g
+
+            # Fallback to genomic_description if available
+            g_desc = data.get("genomic_description")
             if g_desc and ":g." in g_desc:
                 return g_desc
-        elif isinstance(first_g, str) and ":g." in first_g:
-            return first_g
-
-    # Fallback to genomic_description if available
-    g_desc = data.get("genomic_description")
-    if g_desc and ":g." in g_desc:
-        return g_desc
+            
+            # Conversion failed - decorator will not cache None
+            return None
+            
+        except (requests.exceptions.Timeout, requests.exceptions.ReadTimeout) as e:
+            # Handle timeout errors with retry
+            if attempt < max_retries - 1:
+                wait_time = base_delay * (2 ** attempt)
+                logging.warning(f"Request timeout (attempt {attempt + 1}/{max_retries}), retrying after {wait_time}s")
+                time.sleep(wait_time)
+                continue
+            else:
+                logging.error(f"Request timeout after {max_retries} attempts for {encoded_variant}")
+                return None
+                
+        except requests.exceptions.RequestException as e:
+            # Handle other network errors
+            if attempt < max_retries - 1:
+                wait_time = base_delay * (2 ** attempt)
+                logging.warning(f"Request error (attempt {attempt + 1}/{max_retries}): {e}, retrying after {wait_time}s")
+                time.sleep(wait_time)
+                continue
+            else:
+                logging.error(f"Request failed after {max_retries} attempts for {encoded_variant}: {e}")
+                return None
+                
+        except Exception as e:
+            # Handle any other unexpected errors
+            logging.error(f"Unexpected error for {encoded_variant}: {e}")
+            return None
     
-    # Conversion failed - decorator will not cache None
+    # Should not reach here, but return None as fallback
     return None
 
 def main():

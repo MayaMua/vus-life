@@ -14,8 +14,8 @@ from tools.variant_processor.hgvs_c_to_g import convert_cdna_to_genomic_hgvs_mut
 
 if __name__ == "__main__":
     input_file_path = "../data_local/raw/lovd/USH2A_LOVD.csv"
-    df = pd.read_csv(input_file_path)
-    columns_required = ['DNA change (cDNA)     ', 'Clinical classification     ']
+    df = pd.read_csv(input_file_path, encoding='utf-8')
+    columns_required = ['DNA change (cDNA)     ', 'Clinical classification     ', 'DNA change (hg38)     ']
     df = df[columns_required]
 
     # df = df.rename(columns={columns_required[0]: 'hgvs_coding', columns_required[1]: 'pathogenicity_original'})
@@ -64,14 +64,37 @@ if __name__ == "__main__":
     # Select first 10 rows to test
     # df_filtered = df_filtered[:10].copy()
 
-
-    print("\nConverting cDNA to genomic HGVS (GRCh38)...")
+    print("\nBuilding hgvs_genomic_38 from existing DNA change (hg38) column...")
     hgvs_genomic_list = []
-    for cdna in tqdm(df_filtered[columns_required[0]], desc="cDNA to genomic"):
-        # Function signature: convert_cdna_to_genomic_hgvs_mutalyzer(transcript_accession, cdna_hgvs_string, genomic_accession)
-        hgvs_g = convert_cdna_to_genomic_hgvs_mutalyzer('NM_206933.4', cdna, 'NC_000001.11')
-        hgvs_genomic_list.append(hgvs_g)
+    hg38_col = columns_required[2]  # 'DNA change (hg38)'
+    cdna_col = columns_required[0]  # 'DNA change (cDNA)'
+    from_existing = 0
+    from_conversion = 0
+    
+    for idx, row in tqdm(df_filtered.iterrows(), total=len(df_filtered), desc="Building genomic HGVS"):
+        hg38_value = row[hg38_col]
+        
+        # Use existing hg38 value if available and not empty
+        if pd.notna(hg38_value) and str(hg38_value).strip():
+            # Add NC_000001.11: prefix if not already present
+            hg38_str = str(hg38_value).strip()
+            if hg38_str.startswith('NC_'):
+                hgvs_genomic_list.append(hg38_str)
+            elif hg38_str.startswith('g.'):
+                hgvs_genomic_list.append('NC_000001.11:' + hg38_str)
+            else:
+                # Assume it's a g. notation without prefix
+                hgvs_genomic_list.append('NC_000001.11:g.' + hg38_str)
+            from_existing += 1
+        else:
+            # If empty, try to convert from cDNA using Mutalyzer
+            cdna = row[cdna_col]
+            hgvs_g = convert_cdna_to_genomic_hgvs_mutalyzer('NM_206933.4', cdna, 'NC_000001.11')
+            hgvs_genomic_list.append(hgvs_g)
+            from_conversion += 1
+    
     df_filtered['hgvs_genomic_38'] = hgvs_genomic_list
+    print(f"\nGenomic HGVS sources: {from_existing} from existing column, {from_conversion} from cDNA conversion")
     
     # Debug: Check what genomic HGVS values we got
     print("\nSample genomic HGVS values:")
@@ -107,6 +130,11 @@ if __name__ == "__main__":
         for vcf in vcf_results
     ], index=df_filtered.index)
     
+    # Convert integer columns to nullable integer type (Int64) to preserve integer format
+    # This prevents pandas from converting to float when None values are present
+    vcf_df['chromosome'] = vcf_df['chromosome'].astype('Int64')
+    vcf_df['position'] = vcf_df['position'].astype('Int64')
+    
     # Assign all columns at once
     df_filtered[['chromosome', 'position', 'ref_allele', 'alt_allele']] = vcf_df
     
@@ -133,5 +161,5 @@ if __name__ == "__main__":
     
     output_file_path = "../data_local/processed/lovd/USH2A_variants.csv"
     os.makedirs(os.path.dirname(output_file_path), exist_ok=True)
-    df_output.to_csv(output_file_path, index=False)
+    df_output.to_csv(output_file_path, index=False, encoding='utf-8')
     print(f"\nSaved to: {output_file_path}")
