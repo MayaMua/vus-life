@@ -13,13 +13,16 @@ from tools.variant_processor.hgvs_c_to_g import convert_cdna_to_genomic_hgvs_mut
 
 
 if __name__ == "__main__":
-    input_file_path = "../data_local/raw/lovd/USH2A_LOVD.csv"
+    gene_symbol = "USH2A"
+    genomic_accession = "NC_000001.11"
+    transcript_accession = "NM_206933.4"
+    input_file_path = f"../data_local/raw/lovd/{gene_symbol}_LOVD.csv"
     df = pd.read_csv(input_file_path, encoding='utf-8')
     columns_required = ['DNA change (cDNA)     ', 'Clinical classification     ', 'DNA change (hg38)     ']
     df = df[columns_required]
 
     # df = df.rename(columns={columns_required[0]: 'hgvs_coding', columns_required[1]: 'pathogenicity_original'})
-    df['gene_symbol'] = 'USH2A'
+    df['gene_symbol'] = gene_symbol
     
     # Filter and classify pathogenicity
     def classify_pathogenicity(x):
@@ -60,7 +63,7 @@ if __name__ == "__main__":
     
     # Process variants: convert cDNA to genomic HGVS, then to VCF
     print("\nBuilding hgvs_coding...")
-    df_filtered['hgvs_coding'] = df_filtered[columns_required[0]].apply(lambda x: "NM_206933.4" + ":" + x)
+    df_filtered['hgvs_coding'] = df_filtered[columns_required[0]].apply(lambda x: transcript_accession + ":" + x)
     # Select first 10 rows to test
     # df_filtered = df_filtered[:10].copy()
 
@@ -81,15 +84,15 @@ if __name__ == "__main__":
             if hg38_str.startswith('NC_'):
                 hgvs_genomic_list.append(hg38_str)
             elif hg38_str.startswith('g.'):
-                hgvs_genomic_list.append('NC_000001.11:' + hg38_str)
+                hgvs_genomic_list.append(genomic_accession + ':' + hg38_str)
             else:
                 # Assume it's a g. notation without prefix
-                hgvs_genomic_list.append('NC_000001.11:g.' + hg38_str)
+                hgvs_genomic_list.append(genomic_accession + ':g.' + hg38_str)
             from_existing += 1
         else:
             # If empty, try to convert from cDNA using Mutalyzer
             cdna = row[cdna_col]
-            hgvs_g = convert_cdna_to_genomic_hgvs_mutalyzer('NM_206933.4', cdna, 'NC_000001.11')
+            hgvs_g = convert_cdna_to_genomic_hgvs_mutalyzer(transcript_accession, cdna, genomic_accession)
             hgvs_genomic_list.append(hgvs_g)
             from_conversion += 1
     
@@ -159,7 +162,7 @@ if __name__ == "__main__":
     print(f"\nSample output data:")
     print(df_output.head(10))
     
-    output_file_path = "../data_local/processed/lovd/USH2A_variants.csv"
+    output_file_path = f"../data_local/processed/lovd/{gene_symbol}_variants.csv"
     os.makedirs(os.path.dirname(output_file_path), exist_ok=True)
     df_output.to_csv(output_file_path, index=False, encoding='utf-8')
     print(f"\nSaved to: {output_file_path}")
