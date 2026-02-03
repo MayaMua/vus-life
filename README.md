@@ -14,6 +14,12 @@ Ready to see the magic in action?
 
 ------
 
+### 🤖 AI Interpretation (API)
+
+The **AI interpretation** feature provides a **skeptical second-opinion** on VUS_LIFE’s embedding-based predictions. It compares the target variant (unknown significance) against its neighbor variants (known pathogenicity) and performs a **discordance check**: it evaluates whether the target truly shares the same pathogenic mechanism as the neighbors by checking functional impact and amino acid changes, concordance of computational scores (e.g. AlphaMissense, EVE, SpliceAI), and physicochemical properties of the substitutions. Embedding models can cluster variants by gene, exon, or location rather than by real biological mechanism, so this step helps flag cases where the embedding prediction may be misleading and supports more reliable variant interpretation.
+
+------
+
 🚀 Want to Try It Yourself?
 Excited to take VUS.LIFE for a spin? A user-friendly desktop app is coming soon! You can try a beta version via: 👉 **[vus-life-beta](http://52.54.223.114:8501/)**.
 

@@ -38,10 +38,21 @@ The results page contains two sections:
 - **Existing Variants**: Variants from your input that already exist in the training dataset with known pathogenicity labels
 - **New Variants**: Variants from your input not present in the training dataset, which will be predicted as having unknown pathogenicity
 
+**New Feature! Ask AI (AI Interpretation)**
+
+- Expand the **Ask AI** section on the results page to get a second-opinion interpretation of the embedding-based prediction.
+- **Select variant of interest**: Choose the variant you want the AI to analyze (it will compare it against its neighbor variants).
+- **Available model**: Goolge's latest flash model.
+- **API key**: Enter your **Google API key**. Get your API key here: [Gemini API – Google AI for Developers](https://ai.google.dev/gemini-api/docs).
+- Click **Run** to start the analysis. The AI will perform a discordance check and return a verdict with mechanism analysis, score concordance, and red flags (if any).
+
+![AI Interpretation](Results/assets/AI_Demo.png)
+
 ### 6. Embedding Plot
 
 - View the 2D spatial distribution of your input variants' mathematical representations
 - This visualization shows how known variants cluster in the embedding space
+
 
 ---
 
