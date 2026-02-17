@@ -4,7 +4,7 @@
 
 This application provides variant pathogenicity prediction and embedding visualization for genetic variants using machine learning models. 
 
-**Access the app here:** [http://52.54.223.114:8501/](http://52.54.223.114:8501/)
+**Access the app here:** [http://vus.life:8501/](http://vus.life:8501/)
 
 ---
 
