@@ -1,0 +1,13 @@
+@import "tailwindcss";
+@plugin "daisyui";
+
+/* Base layer: apply theme colors and typography so the app is visibly styled */
+@layer base {
+  html {
+    @apply bg-base-100 text-base-content;
+  }
+  body {
+    min-height: 100vh;
+    font-family: ui-sans-serif, system-ui, sans-serif, "Segoe UI", Roboto, sans-serif;
+  }
+}
