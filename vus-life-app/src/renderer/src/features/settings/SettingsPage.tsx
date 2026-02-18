@@ -1,16 +1,10 @@
 /**
- * Placeholder for Settings page.
+ * Settings feature entry: composes SettingsLayout (sidebar + tab content).
  */
 
 import React from 'react'
+import { SettingsLayout } from './SettingsLayout'
 
 export const SettingsPage: React.FC = () => {
-  return (
-    <div className="flex h-full w-full items-center justify-center bg-base-100 p-8">
-      <div className="text-center text-base-content/70">
-        <p className="text-lg font-semibold">Settings</p>
-        <p className="text-sm mt-2">Coming soon.</p>
-      </div>
-    </div>
-  )
+  return <SettingsLayout />
 }

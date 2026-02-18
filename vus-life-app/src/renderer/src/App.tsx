@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { MainLayout } from './components/MainLayout'
 import { Sidebar } from './components/Siderbar'
 import { GlobalAgreementDialog } from './components/GlobalAgreementDialog'
 import { VusPage } from './features/vus/VusPage'
@@ -16,15 +17,14 @@ const App: React.FC = () => {
   }, [fetchVusConfig])
 
   return (
-    <div className="flex h-screen w-screen bg-base-100 text-base-content overflow-hidden">
+    <>
       <GlobalAgreementDialog />
-      <Sidebar activeTab={activeTab} onTabChange={setActiveTab} />
-      <main className="flex-1 overflow-hidden relative bg-base-100">
+      <MainLayout sidebar={<Sidebar activeTab={activeTab} onTabChange={setActiveTab} />}>
         {activeTab === 'vus' && <VusPage />}
         {activeTab === 'pdf' && <PdfParserPage />}
         {activeTab === 'settings' && <SettingsPage />}
-      </main>
-    </div>
+      </MainLayout>
+    </>
   )
 }
 

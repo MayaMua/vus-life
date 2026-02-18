@@ -23,8 +23,10 @@ export interface VariantRow {
   hgvs_genomic_38: string
   most_severe_consequence: string
   pathogenicity_original?: string
-  /** Prediction score for new variants (e.g. confidence or pred result). */
+  /** Numeric confidence (e.g. '0.82') for gauge/score bar. */
   prediction_score?: string
+  /** Human-readable prediction (e.g. 'Likely pathogenic') for table/detail. */
+  prediction_label?: string
   /** 'existing' | 'new' */
   status: 'existing' | 'new'
   /** Full metadata for detail sheet. */

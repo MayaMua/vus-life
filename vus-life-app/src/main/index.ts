@@ -1,21 +1,25 @@
-import { app, shell, BrowserWindow, ipcMain } from 'electron'
+import { app, shell, BrowserWindow, ipcMain, dialog } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
+import type Store from 'electron-store'
 import icon from '../../resources/icon.png?asset'
-import path from 'path';
-const fs = require('fs');
-const https = require('https');
 
-// Define base path for local metadata
-// We use app.getPath('userData') to ensure we have write permissions in a standard location
-const DATA_PATH = path.join(app.getPath('userData'), 'data_local', 'metadata');
+const DEFAULT_WIDTH = 1280
+const DEFAULT_HEIGHT = 800
 
+type WindowBounds = { x: number; y: number; width: number; height: number }
 
-function createWindow(): void {
-  // Create the browser window.
+function createWindow(windowStore: Store<{ bounds?: WindowBounds }>): void {
+  const savedBounds = windowStore.get('bounds')
+  const width = savedBounds?.width ?? DEFAULT_WIDTH
+  const height = savedBounds?.height ?? DEFAULT_HEIGHT
+  const x = savedBounds?.x
+  const y = savedBounds?.y
+
   const mainWindow = new BrowserWindow({
-    width: 900,
-    height: 670,
+    width,
+    height,
+    ...(typeof x === 'number' && typeof y === 'number' ? { x, y } : {}),
     show: false,
     autoHideMenuBar: true,
     ...(process.platform === 'linux' ? { icon } : {}),
@@ -24,6 +28,15 @@ function createWindow(): void {
       sandbox: false
     }
   })
+
+  const saveBounds = (): void => {
+    const b = mainWindow.getBounds()
+    windowStore.set('bounds', { x: b.x, y: b.y, width: b.width, height: b.height })
+  }
+
+  mainWindow.on('resize', saveBounds)
+  mainWindow.on('move', saveBounds)
+  mainWindow.on('close', saveBounds)
 
   mainWindow.on('ready-to-show', () => {
     mainWindow.show()
@@ -46,7 +59,11 @@ function createWindow(): void {
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  // Dynamic import so ESM-only electron-store works when main is compiled to CJS
+  const { default: Store } = await import('electron-store')
+  const windowStore = new Store<{ bounds?: WindowBounds }>({ name: 'window-state' })
+
   // Set app user model id for windows
   electronApp.setAppUserModelId('com.electron')
 
@@ -60,12 +77,20 @@ app.whenReady().then(() => {
   // IPC test
   ipcMain.on('ping', () => console.log('pong'))
 
-  createWindow()
+  // Folder selection for General Settings storage path
+  ipcMain.handle('open-folder-dialog', async (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender) ?? BrowserWindow.getFocusedWindow()
+    if (!win) return null
+    const result = await dialog.showOpenDialog(win, { properties: ['openDirectory'] })
+    return result.canceled ? null : result.filePaths[0] ?? null
+  })
+
+  createWindow(windowStore)
 
   app.on('activate', function () {
     // On macOS it's common to re-create a window in the app when the
     // dock icon is clicked and there are no other windows open.
-    if (BrowserWindow.getAllWindows().length === 0) createWindow()
+    if (BrowserWindow.getAllWindows().length === 0) createWindow(windowStore)
   })
 })
 
