@@ -2,9 +2,9 @@
 
 ## Overview
 
-This application provides variant pathogenicity prediction and embedding visualization for genetic variants using machine learning models. 
+This application provides variant pathogenicity prediction and embedding visualization for genetic variants using machine learning models.
 
-**Access the app here:** [http://vus.life:8501/](http://vus.life:8501/)
+**Access the app here:** [http://vus.life/](http://vus.life/)
 
 ---
 
@@ -53,7 +53,6 @@ The results page contains two sections:
 - View the 2D spatial distribution of your input variants' mathematical representations
 - This visualization shows how known variants cluster in the embedding space
 
-
 ---
 
 ## Test Data
@@ -69,6 +68,6 @@ Test data files are available for **BRCA1**, **BRCA2**, and **FBN1** genes.
 
 ## Feedback & Support
 
-Thank you for trying this app! Your feedback and comments are greatly appreciated. 
+Thank you for trying this app! Your feedback and comments are greatly appreciated.
 
 If you encounter any issues, please feel free to contact me or open an issue on this repository.
