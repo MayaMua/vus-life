@@ -1,27 +1,36 @@
 /**
  * Global Data Usage Agreement modal. Shown on first app launch.
- * Subscribes to useAppStore; when user confirms with "Don't show again" checked, persists via store.
+ * Reads and updates agreement state via FastAPI settings (GET/PATCH /api/settings).
  */
 
 import React, { useState, useEffect } from 'react'
-import { useAppStore } from '../store/useAppStore'
+import { useSettings, useUpdateSettings } from '../features/settings/useSettings'
 import { DATA_USAGE_AGREEMENT_MD } from '../constants/agreementContent'
 
 export const GlobalAgreementDialog: React.FC = () => {
-  const { hasAcceptedAgreement, acceptAgreement } = useAppStore()
+  const { data: settings, isLoading } = useSettings()
+  const updateSettingsMutation = useUpdateSettings()
   const [isOpen, setIsOpen] = useState(false)
   const [dontShowAgain, setDontShowAgain] = useState(true)
 
-  // Only show dialog when store says user has not accepted yet
+  const hasAcceptedAgreement = settings?.general_settings?.has_accepted_agreement ?? false
+
+  // Show dialog when config says user has not accepted yet (after settings loaded)
   useEffect(() => {
-    if (!hasAcceptedAgreement) {
+    if (!isLoading && !hasAcceptedAgreement) {
       setIsOpen(true)
     }
-  }, [hasAcceptedAgreement])
+  }, [isLoading, hasAcceptedAgreement])
 
-  const handleConfirm = () => {
+  const handleConfirm = async () => {
     if (dontShowAgain) {
-      acceptAgreement()
+      try {
+        await updateSettingsMutation.mutateAsync({
+          general_settings: { has_accepted_agreement: true },
+        })
+      } catch {
+        // Still close dialog; user can re-accept later
+      }
     }
     setIsOpen(false)
   }

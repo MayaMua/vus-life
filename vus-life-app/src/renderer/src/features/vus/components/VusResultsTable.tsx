@@ -4,9 +4,15 @@
  */
 
 import React from 'react'
-import { Dna, ChevronRight, Loader2 } from 'lucide-react'
-import { useVusStore } from '../stores/useVusStore'
+import { Dna, ChevronRight } from 'lucide-react'
 import type { VariantRow } from '../types'
+
+export interface VusResultsTableProps {
+  variantRows: VariantRow[]
+  resultsLoading: boolean
+  selectedVariant: VariantRow | null
+  onSelectVariant: (row: VariantRow | null) => void
+}
 
 /** Map store variant row to table row shape (id, score, pathogenicity, status label). */
 function toTableRow(row: VariantRow): {
@@ -28,12 +34,12 @@ function toTableRow(row: VariantRow): {
   }
 }
 
-export const VusResultsTable: React.FC = () => {
-  const variantRows = useVusStore((s) => s.variantRows)
-  const isPredictionLoading = useVusStore((s) => s.resultsLoading)
-  const selectedVariant = useVusStore((s) => s.selectedVariant)
-  const setSelectedVariant = useVusStore((s) => s.setSelectedVariant)
-
+export const VusResultsTable: React.FC<VusResultsTableProps> = ({
+  variantRows,
+  resultsLoading: isPredictionLoading,
+  selectedVariant,
+  onSelectVariant: setSelectedVariant,
+}) => {
   const results = variantRows.map(toTableRow)
 
   if (isPredictionLoading) {

@@ -11,3 +11,20 @@
     font-family: ui-sans-serif, system-ui, sans-serif, "Segoe UI", Roboto, sans-serif;
   }
 }
+
+/* Shake animation for error feedback */
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-4px); }
+  75% { transform: translateX(4px); }
+}
+
+.animate-shake {
+  animation: shake 0.2s ease-in-out 0s 2;
+}
+
+/* Scroll area: always show scrollbar and reserve gutter so it doesn't overlap content */
+.scroll-area-stable {
+  overflow-y: scroll;
+  scrollbar-gutter: stable;
+}

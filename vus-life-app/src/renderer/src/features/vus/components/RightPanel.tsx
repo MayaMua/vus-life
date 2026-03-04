@@ -1,12 +1,20 @@
 /**
  * Right panel: summary cards (Total / New / Existing) and combined variants table.
- * Row click opens VariantDetailSheet.
+ * Row click opens VariantDetailSheet. Receives data via props (no store).
  */
 
 import React from 'react'
-import { useVusStore } from '../stores/useVusStore'
 import { VariantDetailSheet } from './VariantDetailSheet'
 import type { VariantRow } from '../types'
+import type { PredictionResultsResponse } from '../types'
+
+export interface RightPanelProps {
+  variantRows?: VariantRow[]
+  predictionResults?: PredictionResultsResponse | null
+  resultsError?: string | null
+  selectedVariant?: VariantRow | null
+  onSelectVariant?: (row: VariantRow | null) => void
+}
 
 function SummaryCards({
   total,
@@ -35,13 +43,13 @@ function SummaryCards({
   )
 }
 
-export const RightPanel: React.FC = () => {
-  const variantRows = useVusStore((s) => s.variantRows)
-  const predictionResults = useVusStore((s) => s.predictionResults)
-  const resultsError = useVusStore((s) => s.resultsError)
-  const selectedVariant = useVusStore((s) => s.selectedVariant)
-  const setSelectedVariant = useVusStore((s) => s.setSelectedVariant)
-
+export const RightPanel: React.FC<RightPanelProps> = ({
+  variantRows = [],
+  predictionResults = null,
+  resultsError = null,
+  selectedVariant = null,
+  onSelectVariant = () => {},
+}) => {
   const total = predictionResults?.variants_count ?? 0
   const existingCount = predictionResults?.existing_variants?.length ?? 0
   const newCount = total - existingCount - (predictionResults?.failed?.results_count ?? 0)
@@ -80,7 +88,7 @@ export const RightPanel: React.FC = () => {
                     <tr
                       key={row.variant_id}
                       className="cursor-pointer hover:bg-base-200"
-                      onClick={() => setSelectedVariant(row)}
+                      onClick={() => onSelectVariant(row)}
                     >
                       <td>
                         <span
@@ -118,7 +126,7 @@ export const RightPanel: React.FC = () => {
 
       <VariantDetailSheet
         variant={selectedVariant}
-        onClose={() => setSelectedVariant(null)}
+        onClose={() => onSelectVariant(null)}
       />
     </div>
   )

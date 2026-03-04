@@ -1,0 +1,20 @@
+{
+  "providers": {
+    "deepseek_official": {
+      "base_url": "https://api.deepseek.com",
+      "type": "openai"
+    }
+  },
+  "instances": {
+    "my_research_model": {
+      "provider_key": "deepseek_official",
+      "api_key": "sk-123",
+      "models": ["deepseek-chat"]
+    },
+    "my_coding_model": {
+      "provider_key": "deepseek_official",
+      "api_key": "sk-456",
+      "models": ["deepseek-coder"]
+    }
+  }
+}

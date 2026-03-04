@@ -1,125 +1,238 @@
 /**
- * Model Provider settings: Gemini/LLM configs from useSettingsStore.
+ * Model Provider settings: Cherry Studio–style layout.
+ * Reads and updates config via FastAPI (GET/PATCH /api/settings).
  */
 
-import React, { useState } from 'react'
-import { Search, ExternalLink, Settings, Eye, EyeOff } from 'lucide-react'
-import { useSettingsStore } from '../../../store/useSettingsStore'
+import React, { useState, useEffect } from 'react'
+import { Plus } from 'lucide-react'
+import toast from 'react-hot-toast'
+import { useSettings, useUpdateSettings } from '../useSettings'
+import { ProviderDetailPanel } from './ProviderDetailPanel'
 
-const GEMINI_LOGO_URL = 'https://upload.wikimedia.org/wikipedia/commons/8/8a/Google_Gemini_logo.svg'
+const LOGOS: Record<string, string> = {
+  gemini: 'https://img.icons8.com/?size=100&id=17949&format=png&color=000000',
+  openai: 'https://img.icons8.com/?size=100&id=ApdV0R6qI7aG&format=png&color=000000',
+  deepseek: 'https://img.icons8.com/?size=100&id=w18I4Y4R6b3w&format=png&color=000000',
+  ollama: 'https://img.icons8.com/?size=100&id=jC9ZtCqE0hhp&format=png&color=000000'
+}
+
+const DEFAULT_URLS: Record<string, string> = {
+  gemini: 'https://generativelanguage.googleapis.com',
+  openai: 'https://api.openai.com/v1',
+  deepseek: 'https://api.deepseek.com',
+  ollama: 'http://localhost:11434/v1'
+}
+
+const GET_KEY_URLS: Record<string, string> = {
+  gemini: 'https://aistudio.google.com/app/apikey',
+  openai: 'https://platform.openai.com/api-keys',
+  deepseek: 'https://platform.deepseek.com/keys'
+}
+
+const DISPLAY_NAMES: Record<string, string> = {
+  gemini: 'Google Gemini',
+  openai: 'OpenAI',
+  deepseek: 'DeepSeek',
+  ollama: 'Ollama'
+}
 
 export const ModelProviderSettings: React.FC = () => {
-  const [showApiKey, setShowApiKey] = useState(false)
-  const geminiConfig = useSettingsStore((s) => s.modelProviders.gemini)
-  const updateProviderConfig = useSettingsStore((s) => s.updateProviderConfig)
-  const toggleProvider = useSettingsStore((s) => s.toggleProvider)
+  const { data: settings, isLoading } = useSettings()
+  const updateSettingsMutation = useUpdateSettings()
+  const [selectedProviderId, setSelectedProviderId] = useState<string>('')
 
-  const isGeminiOn = geminiConfig?.enabled ?? true
-  const apiKey = geminiConfig?.apiKey ?? ''
+  const modelSettings = settings?.model_settings
+  const providers = modelSettings?.providers || {}
 
-  const handleToggleGemini = () => {
-    toggleProvider('gemini', !isGeminiOn)
+  // Add Provider state
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false)
+  const [newProviderName, setNewProviderName] = useState('')
+  const [newProviderType, setNewProviderType] = useState('openai')
+
+  // Initialize selected provider
+  useEffect(() => {
+    if (!selectedProviderId && Object.keys(providers).length > 0) {
+      if (providers['gemini']) setSelectedProviderId('gemini')
+      else setSelectedProviderId(Object.keys(providers)[0])
+    }
+  }, [providers, selectedProviderId])
+
+  const handleCreateProvider = async () => {
+    if (!newProviderName.trim()) {
+      toast.error('Provider name is required')
+      return
+    }
+    const newId = crypto.randomUUID()
+    const newProvider = {
+      name: newProviderName.trim(),
+      provider_type: newProviderType,
+      enabled: true,
+      base_url: DEFAULT_URLS[newProviderType] || '',
+      api_key: '',
+      models: []
+    }
+
+    try {
+      await updateSettingsMutation.mutateAsync({
+        model_settings: {
+          providers: {
+            [newId]: newProvider
+          }
+        }
+      })
+      toast.success('Provider added')
+      setSelectedProviderId(newId)
+      setIsAddModalOpen(false)
+      setNewProviderName('')
+      setNewProviderType('openai')
+    } catch (e) {
+      toast.error('Failed to create provider')
+    }
+  }
+
+  if (isLoading) {
+    return <div className="flex h-full items-center justify-center"><span className="loading loading-spinner text-[#00B96B]"></span></div>
   }
 
   return (
-    <>
-      <header className="mb-8">
+    <div className="flex flex-col h-full bg-[#FAFAFA]">
+      <header className="px-8 py-6 shrink-0 bg-white border-b border-gray-200">
         <h1 className="text-2xl font-bold text-slate-800 tracking-tight">Model Providers</h1>
-        <p className="text-slate-500 text-sm mt-1 font-medium">Configure external AI services for analysis and parsing.</p>
+        <p className="text-slate-500 text-sm mt-1 font-medium">
+          Configure external AI services for analysis and parsing.
+        </p>
+
       </header>
 
-      <div className="flex border border-slate-100 rounded-2xl overflow-hidden shadow-sm h-[500px]">
-        {/* Provider Sub-list */}
-        <div className="w-72 bg-slate-50/50 border-r border-slate-100">
-          <div className="p-4 border-b border-slate-100 relative">
-            <Search className="absolute left-7 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
-            <input
-              placeholder="Search Providers..."
-              className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
-            />
-          </div>
-          <div className="p-2">
-            <button
-              type="button"
-              className="w-full flex items-center justify-between p-3 bg-white border border-blue-100 rounded-xl shadow-sm text-left"
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 bg-white border border-slate-100 rounded-lg flex items-center justify-center p-1 shadow-sm overflow-hidden">
-                  <img src={GEMINI_LOGO_URL} alt="Gemini" className="w-full h-full object-contain p-0.5" />
-                </div>
-                <span className="text-sm font-bold text-slate-800">Google Gemini</span>
-              </div>
-              <span
-                className={`text-[10px] px-1.5 py-0.5 rounded font-bold uppercase border ${
-                  isGeminiOn ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-slate-100 text-slate-500 border-slate-200'
-                }`}
-              >
-                {isGeminiOn ? 'ON' : 'OFF'}
-              </span>
-            </button>
+      {/* Two-Pane Layout */}
+      <div className="flex flex-1 min-h-0">
+        {/* Left Pane: Provider List */}
+        <div className="w-64 flex flex-col border-r border-gray-200 bg-[#F3F4F6]/30 overflow-y-auto">
+          <div className="p-3">
+             <div className="relative mb-3">
+                <input 
+                  type="text" 
+                  placeholder="Search Providers..."
+                  className="w-full h-9 pl-4 pr-4 rounded-lg border border-gray-200 bg-white text-xs focus:outline-none focus:border-[#00B96B] shadow-sm"
+                />
+             </div>
+             <div className="flex flex-col gap-1.5">
+               {Object.entries(providers).map(([pid, pSettings]) => {
+                 const isSelected = selectedProviderId === pid
+                 const isEnabled = pSettings.enabled
+                 const pType = pSettings.provider_type || pid
+                 const displayName = pSettings.name || DISPLAY_NAMES[pType] || pType
+                 const logoUrl = LOGOS[pType] || ''
+
+                 return (
+                   <button
+                     key={pid}
+                     onClick={() => setSelectedProviderId(pid)}
+                     className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-left transition-all ${
+                       isSelected 
+                         ? 'bg-white shadow-sm border border-gray-200' 
+                         : 'hover:bg-gray-200/50 border border-transparent'
+                     }`}
+                   >
+                     <div className="flex items-center gap-3 overflow-hidden">
+                       <div className="w-6 h-6 rounded flex items-center justify-center overflow-hidden shrink-0">
+                         {logoUrl ? <img src={logoUrl} alt={displayName} className="w-4 h-4 object-contain" /> : <div className="w-4 h-4 bg-gray-200 rounded-full" />}
+                       </div>
+                       <span className={`text-sm tracking-tight truncate ${isSelected ? 'font-bold text-slate-800' : 'font-medium text-slate-600'}`}>
+                         {displayName}
+                       </span>
+                     </div>
+                     
+                     {/* Green ON badge / Gray UN badge */}
+                     <div className={`px-1.5 py-[2px] rounded text-[10px] font-bold tracking-widest border shrink-0 ${
+                       isEnabled 
+                         ? 'bg-[#00B96B]/10 text-[#00B96B] border-[#00B96B]/20' 
+                         : 'bg-gray-100 text-gray-400 border-gray-200'
+                     }`}>
+                       {isEnabled ? 'ON' : 'OFF'}
+                     </div>
+                   </button>
+                 )
+               })}
+             </div>
+             <div className="mt-4 px-1">
+               <button
+                 onClick={() => setIsAddModalOpen(true)}
+                 className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg border border-dashed border-gray-300 text-sm font-medium text-slate-500 hover:border-[#00B96B] hover:text-[#00B96B] group transition-colors"
+               >
+                 <Plus className="w-4 h-4 text-gray-400 group-hover:text-[#00B96B] transition-colors" />
+                 Add
+               </button>
+             </div>
           </div>
         </div>
 
-        {/* Provider Detail Config */}
-        <div className="flex-1 bg-white p-8 overflow-y-auto">
-          <div className="flex items-center justify-between mb-8 pb-4 border-b border-slate-100">
-            <div className="flex items-center gap-2">
-              <h2 className="text-xl font-bold text-slate-800 uppercase tracking-tight">Gemini</h2>
-              <ExternalLink className="w-4 h-4 text-slate-300 hover:text-blue-500 cursor-pointer transition-colors" />
-            </div>
-            <button
-              type="button"
-              onClick={handleToggleGemini}
-              className={`w-11 h-6 rounded-full flex items-center px-1 transition-all cursor-pointer ${
-                isGeminiOn ? 'bg-emerald-500 justify-end' : 'bg-slate-200 justify-start'
-              }`}
-            >
-              <div className="w-4 h-4 bg-white rounded-full shadow-md" />
-            </button>
-          </div>
-
-          <div className="space-y-8">
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">API Key</label>
-                <Settings className="w-3.5 h-3.5 text-slate-300 cursor-pointer hover:text-slate-500 transition-colors" />
-              </div>
-              <div className="flex gap-2">
-                <div className="relative flex-1">
-                  <input
-                    type={showApiKey ? 'text' : 'password'}
-                    value={apiKey}
-                    onChange={(e) => updateProviderConfig('gemini', { apiKey: e.target.value })}
-                    placeholder="••••••••••••••••"
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 pl-4 pr-10 text-sm font-mono focus:outline-none focus:ring-1 focus:ring-blue-500 transition-all"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowApiKey(!showApiKey)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
-                  >
-                    {showApiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
-                <button
-                  type="button"
-                  className="px-6 py-2.5 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 hover:bg-slate-50 transition-all active:scale-95"
-                >
-                  Check
-                </button>
-              </div>
-              <a
-                href="https://aistudio.google.com/app/apikey"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-block text-[11px] text-blue-600 font-bold hover:underline"
-              >
-                Get API Key from Google AI Studio
-              </a>
-            </div>
-          </div>
-        </div>
+        {/* Right Pane: Provider Configuration */}
+        {selectedProviderId && providers[selectedProviderId] && (
+          <ProviderDetailPanel
+            key={selectedProviderId}
+            providerId={selectedProviderId}
+            name={providers[selectedProviderId].name || DISPLAY_NAMES[providers[selectedProviderId].provider_type || selectedProviderId] || selectedProviderId}
+            logoUrl={LOGOS[providers[selectedProviderId].provider_type || selectedProviderId] || ''}
+            settings={providers[selectedProviderId]}
+            defaultBaseUrl={DEFAULT_URLS[providers[selectedProviderId].provider_type || selectedProviderId] || ''}
+            getApiKeyUrl={GET_KEY_URLS[providers[selectedProviderId].provider_type || selectedProviderId]}
+          />
+        )}
       </div>
-    </>
+
+      {/* Add Provider Modal */}
+      {isAddModalOpen && (
+        <div className="fixed inset-0 z-100 flex items-center justify-center bg-black/30 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="w-full max-w-sm rounded-[24px] bg-white p-7 shadow-2xl animate-in zoom-in-95 duration-200">
+            <h2 className="mb-6 text-xl font-bold tracking-tight text-slate-800">Add Provider</h2>
+            
+            <div className="flex flex-col gap-5">
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-slate-700">Provider Name</label>
+                <input
+                  type="text"
+                  placeholder="Example: OpenAI"
+                  value={newProviderName}
+                  onChange={(e) => setNewProviderName(e.target.value)}
+                  className="w-full rounded-xl border border-gray-200 bg-white px-4 h-11 text-sm shadow-sm transition-colors focus:border-[#00B96B] focus:outline-none focus:ring-1 focus:ring-[#00B96B]"
+                  autoFocus
+                />
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-slate-700">Provider Type</label>
+                <select
+                  value={newProviderType}
+                  onChange={(e) => setNewProviderType(e.target.value)}
+                  className="w-full rounded-xl border border-gray-200 bg-white px-4 h-11 text-sm shadow-sm transition-colors focus:border-[#00B96B] focus:outline-none focus:ring-1 focus:ring-[#00B96B]"
+                >
+                  <option value="openai">OpenAI</option>
+                  <option value="ollama">Ollama</option>
+                  <option value="gemini">Gemini</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="mt-8 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setIsAddModalOpen(false)}
+                className="btn btn-ghost rounded-xl border border-gray-200 hover:bg-gray-50 h-10 px-5 text-sm font-semibold text-slate-600 shadow-sm"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleCreateProvider}
+                className="btn border-transparent bg-[#00B96B] hover:bg-[#00B96B]/90 rounded-xl h-10 px-6 text-sm font-semibold text-white shadow-sm"
+              >
+                OK
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   )
 }

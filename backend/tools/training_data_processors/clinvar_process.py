@@ -5,6 +5,9 @@ import re
 from tqdm import tqdm
 from typing import Optional, Tuple
 
+# Variant types for which we use Mutalyzer (cDNA -> genomic) instead of SPDI parsing
+MUTALYZER_VARIANT_TYPES: Tuple[str, ...] = ("Deletion", "Duplication", "Insertion")
+
 # Add the backend directory to the Python path to enable package imports
 backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, backend_dir)
@@ -100,217 +103,96 @@ def classify_pathogenicity(pathogenicity_str):
     return None
 
 
-def parse_spdi_to_variant_components(spdi_notation: str) -> Tuple[Optional[str], Optional[int], Optional[str], Optional[str]]:
+def _parse_spdi_components(spdi_notation: str) -> Optional[tuple]:
     """
-    Parse SPDI notation to extract chromosome, position, ref, and alt alleles.
-    
-    SPDI format: Sequence:Position:Deletion:Insertion
-    - Position is 0-based
-    - Deletion: bases being deleted/replaced
-    - Insertion: bases being inserted/replaced with
-    
-    Args:
-        spdi_notation: SPDI notation string (e.g., "NC_000015.10:48645780:G:A")
-        
-    Returns:
-        tuple: (chromosome, position, ref_allele, alt_allele) or (None, None, None, None)
+    Parse SPDI notation into (sequence, pos_0based, deletion, insertion).
+    SPDI format: Sequence:Position:Deletion:Insertion (position 0-based).
+    Returns None if invalid or empty.
     """
     if not isinstance(spdi_notation, str) or not spdi_notation.strip():
-        return None, None, None, None
-        
-    # Regex to parse SPDI: Sequence:Position:Deletion:Insertion
-    # Allow empty deletion/insertion for indels
+        return None
     match = re.match(r"^(NC_\d+\.\d+):(\d+):([ACGT]*):([ACGT]*)$", spdi_notation)
-    
-    if match:
-        sequence, pos_0based_str, deletion, insertion = match.groups()
-        pos_0based = int(pos_0based_str)
-        
-        # Extract chromosome number from NC_000015.10 format
-        chrom_match = re.match(r"NC_0*(\d+)\.\d+", sequence)
-        if chrom_match:
-            chromosome = chrom_match.group(1)
-        else:
-            chromosome = sequence  # Fallback to full sequence
-        
-        # For 1-based position (database storage)
-        position = pos_0based + 1
-        
-        # Handle different SPDI types
-        if deletion and insertion:
-            # Substitution or complex variant
-            ref_allele = deletion
-            alt_allele = insertion
-        elif deletion and not insertion:
-            # Deletion
-            ref_allele = deletion
-            alt_allele = ""
-        elif not deletion and insertion:
-            # Insertion
-            ref_allele = ""
-            alt_allele = insertion
-        else:
-            # No change (shouldn't happen in practice)
-            ref_allele = ""
-            alt_allele = ""
-        
-        return chromosome, position, ref_allele, alt_allele
-    else:
-        return None, None, None, None
+    if not match:
+        return None
+    sequence, pos_0based_str, deletion, insertion = match.groups()
+    return (sequence, int(pos_0based_str), deletion, insertion)
 
 
 def parse_spdi_to_vcf_with_anchor(spdi_notation: str) -> Optional[dict]:
     """
     Converts SPDI notation to VCF format using SPDI's sequence information.
     Only fetches anchor bases (single positions) from NCBI when needed for indels.
-    
-    SPDI format: Sequence:Position:Deletion:Insertion
-    - Position is 0-based
-    - Deletion: reference bases being deleted/replaced (from SPDI!)
-    - Insertion: bases being inserted/replaced with
-    
-    Args:
-        spdi_notation: SPDI notation string (e.g., "NC_000011.10:108227637:TTAATGAT:")
-        
-    Returns:
-        dict: VCF dictionary with keys (chrom, pos, ref, alt), or None if conversion fails
+    Used only for non-Mutalyzer variant types (e.g. single nucleotide variant, Indel).
     """
-    if not isinstance(spdi_notation, str) or not spdi_notation.strip():
+    parsed = _parse_spdi_components(spdi_notation)
+    if not parsed:
         return None
-        
-    # Parse SPDI components
-    match = re.match(r"^(NC_\d+\.\d+):(\d+):([ACGT]*):([ACGT]*)$", spdi_notation)
-    
-    if not match:
-        return None
-    
-    sequence, pos_0based_str, deletion, insertion = match.groups()
-    pos_0based = int(pos_0based_str)
-    accession = sequence
-    
-    # Extract chromosome number from NC_000015.10 format
+    sequence, pos_0based, deletion, insertion = parsed
     chrom_match = re.match(r"NC_0*(\d+)\.\d+", sequence)
-    if chrom_match:
-        chromosome = int(chrom_match.group(1))
-    else:
-        return None  # Can't extract chromosome
-    
-    try:
-        # Import here to avoid circular dependency and only when needed
-        from tools.variant_processor.hgvs_g_to_vcf import get_reference_base
-        
-        # VCF uses 1-based positions and requires anchor bases for indels
-        
-        if deletion and insertion:
-            # Substitution or complex variant (delins)
-            if len(deletion) == 1 and len(insertion) == 1:
-                # Simple SNP: no anchor needed
-                vcf_pos = pos_0based + 1
-                ref = deletion
-                alt = insertion
-            else:
-                # Complex delins: needs anchor base
-                anchor_pos = pos_0based  # 0-based in SPDI, but get_reference_base expects 1-based
-                anchor = get_reference_base(accession, anchor_pos)
-                vcf_pos = anchor_pos
-                ref = anchor + deletion
-                alt = anchor + insertion
-                
-        elif deletion and not insertion:
-            # Pure deletion: VCF needs anchor base before deletion
-            # SPDI has the deleted sequence, we just need the anchor
-            anchor_pos = pos_0based  # Position before deletion
-            anchor = get_reference_base(accession, anchor_pos)
-            vcf_pos = anchor_pos
-            ref = anchor + deletion
-            alt = anchor
-            
-        elif not deletion and insertion:
-            # Pure insertion: VCF needs anchor base
-            anchor_pos = pos_0based
-            anchor = get_reference_base(accession, anchor_pos)
-            vcf_pos = anchor_pos
-            ref = anchor
-            alt = anchor + insertion
-            
-        else:
-            # No change (shouldn't happen)
-            return None
-        
-        return {
-            'chrom': chromosome,
-            'pos': vcf_pos,
-            'ref': ref,
-            'alt': alt
-        }
-    except Exception as e:
-        # If fetching anchor base fails, return None
+    if not chrom_match:
         return None
+    chromosome = int(chrom_match.group(1))
+    try:
+        from tools.variant_processor.hgvs_g_to_vcf import get_reference_base
+        if deletion and insertion:
+            if len(deletion) == 1 and len(insertion) == 1:
+                return {
+                    "chrom": chromosome,
+                    "pos": pos_0based + 1,
+                    "ref": deletion,
+                    "alt": insertion,
+                }
+            anchor = get_reference_base(sequence, pos_0based)
+            return {
+                "chrom": chromosome,
+                "pos": pos_0based,
+                "ref": anchor + deletion,
+                "alt": anchor + insertion,
+            }
+        elif deletion and not insertion:
+            anchor = get_reference_base(sequence, pos_0based)
+            return {
+                "chrom": chromosome,
+                "pos": pos_0based,
+                "ref": anchor + deletion,
+                "alt": anchor,
+            }
+        elif not deletion and insertion:
+            anchor = get_reference_base(sequence, pos_0based)
+            return {
+                "chrom": chromosome,
+                "pos": pos_0based,
+                "ref": anchor,
+                "alt": anchor + insertion,
+            }
+    except Exception:
+        pass
+    return None
 
 
 def parse_spdi_to_genomic_hgvs_grch38(spdi_notation: str) -> Optional[str]:
     """
     Converts SPDI notation to GRCh38 genomic HGVS (g. format).
-    Handles substitutions, deletions, and insertions.
-    
-    SPDI format: Sequence:Position:Deletion:Insertion
-    - For substitutions: NC_000011.10:108222767:C:T -> NC_000011.10:g.108222768C>T
-    - For deletions: NC_000011.10:108227637:TTAATGAT: -> NC_000011.10:g.108227638_108227645del
-    - For insertions: NC_000011.10:108227639::AAA -> NC_000011.10:g.108227639_108227640insAAA
-    
-    Args:
-        spdi_notation: SPDI notation string
-        
-    Returns:
-        str: Genomic HGVS notation, or None if conversion not possible
+    Used only for non-Mutalyzer variant types (e.g. single nucleotide variant, Indel).
     """
-    if not isinstance(spdi_notation, str) or not spdi_notation.strip():
+    parsed = _parse_spdi_components(spdi_notation)
+    if not parsed:
         return None
-        
-    # Parse SPDI components
-    match = re.match(r"^(NC_\d+\.\d+):(\d+):([ACGT]*):([ACGT]*)$", spdi_notation)
-    
-    if not match:
-        return None
-    
-    sequence, pos_0based_str, deletion, insertion = match.groups()
-    pos_0based = int(pos_0based_str)
-    
-    # For HGVS, position is 1-based
+    sequence, pos_0based, deletion, insertion = parsed
     pos_1based = pos_0based + 1
-    
-    # Handle different variant types
     if deletion and insertion:
-        # Substitution or complex variant
         if len(deletion) == 1 and len(insertion) == 1:
-            # Simple substitution: g.108222768C>T
-            genomic_hgvs = f"{sequence}:g.{pos_1based}{deletion}>{insertion}"
-        elif len(deletion) == len(insertion):
-            # Multi-base substitution: g.108222768_108222770delinsABC
-            end_pos = pos_1based + len(deletion) - 1
-            genomic_hgvs = f"{sequence}:g.{pos_1based}_{end_pos}delins{insertion}"
-        else:
-            # Complex indel
-            end_pos = pos_1based + len(deletion) - 1
-            genomic_hgvs = f"{sequence}:g.{pos_1based}_{end_pos}delins{insertion}"
+            return f"{sequence}:g.{pos_1based}{deletion}>{insertion}"
+        end_pos = pos_1based + len(deletion) - 1
+        return f"{sequence}:g.{pos_1based}_{end_pos}delins{insertion}"
     elif deletion and not insertion:
-        # Deletion
         if len(deletion) == 1:
-            # Single base deletion: g.108227638del
-            genomic_hgvs = f"{sequence}:g.{pos_1based}del"
-        else:
-            # Multi-base deletion: g.108227638_108227645del
-            end_pos = pos_1based + len(deletion) - 1
-            genomic_hgvs = f"{sequence}:g.{pos_1based}_{end_pos}del"
+            return f"{sequence}:g.{pos_1based}del"
+        end_pos = pos_1based + len(deletion) - 1
+        return f"{sequence}:g.{pos_1based}_{end_pos}del"
     elif not deletion and insertion:
-        # Insertion: g.108227639_108227640insAAA
-        end_pos = pos_1based + 1
-        genomic_hgvs = f"{sequence}:g.{pos_1based}_{end_pos}ins{insertion}"
-    else:
-        # No change (shouldn't happen)
-        return None
-    
-    return genomic_hgvs
+        return f"{sequence}:g.{pos_1based}_{pos_1based + 1}ins{insertion}"
+    return None
 
 
 def process_clinvar(input_file, output_file, 
@@ -339,8 +221,8 @@ def process_clinvar(input_file, output_file,
     print(f"Total rows in file: {len(df)}")
     print(f"Columns: {df.columns.tolist()}")
     
-    # Select required columns: Name, Canonical SPDI, and Germline classification
-    columns_required = ['Name', 'Canonical SPDI', 'Germline classification']
+    # Select required columns: Name, Canonical SPDI, Variant type, and Germline classification
+    columns_required = ['Name', 'Canonical SPDI', 'Variant type', 'Germline classification']
     df = df[columns_required].copy()
     
     # For testing, take first N rows
@@ -364,10 +246,13 @@ def process_clinvar(input_file, output_file,
     print(f"\nPathogenicity distribution:")
     print(df_filtered['pathogenicity_original'].value_counts())
     
-    # Step 1: Try to parse SPDI notation first
-    print("\nParsing SPDI notation to genomic HGVS...")
-    df_filtered['hgvs_genomic_38_spdi'] = df_filtered['Canonical SPDI'].apply(parse_spdi_to_genomic_hgvs_grch38)
-    
+    # Step 1: Parse SPDI to genomic HGVS only for non-Mutalyzer variant types (Deletion/Duplication/Insertion use Mutalyzer)
+    print("\nParsing SPDI notation to genomic HGVS (non-Mutalyzer types only)...")
+    use_spdi_mask = ~df_filtered['Variant type'].astype(str).str.strip().isin(MUTALYZER_VARIANT_TYPES)
+    df_filtered['hgvs_genomic_38_spdi'] = None
+    df_filtered.loc[use_spdi_mask, 'hgvs_genomic_38_spdi'] = (
+        df_filtered.loc[use_spdi_mask, 'Canonical SPDI'].apply(parse_spdi_to_genomic_hgvs_grch38)
+    )
     spdi_success = df_filtered['hgvs_genomic_38_spdi'].notna().sum()
     print(f"  Successfully parsed {spdi_success}/{len(df_filtered)} variants from SPDI")
     
@@ -562,16 +447,27 @@ def process_clinvar(input_file, output_file,
     vcf_indices = []
     spdi_success_count = 0
     
-    for idx in tqdm(df_filtered.index, desc="SPDI to VCF"):
+    for idx in tqdm(df_filtered.index, desc="SPDI/HGVS to VCF"):
+        variant_type = str(df_filtered.loc[idx, 'Variant type']).strip() if pd.notna(df_filtered.loc[idx, 'Variant type']) else ""
         spdi = df_filtered.loc[idx, 'Canonical SPDI']
-        
-        # Try SPDI-based conversion first (more efficient)
+        hgvs_g = df_filtered.loc[idx, 'hgvs_genomic_38']
         vcf = None
-        if pd.notna(spdi) and spdi:
-            vcf = parse_spdi_to_vcf_with_anchor(spdi)
-            if vcf:
-                spdi_success_count += 1
-        
+        # Deletion, Duplication, Insertion: use Mutalyzer path (hgvs_g -> VCF); fallback to SPDI if Mutalyzer format not convertible (e.g. repeat notation g.123_124A[6])
+        if variant_type in MUTALYZER_VARIANT_TYPES:
+            if pd.notna(hgvs_g) and hgvs_g:
+                vcf = hgvs_g_to_vcf(hgvs_g)
+            if vcf is None and pd.notna(spdi) and spdi:
+                vcf = parse_spdi_to_vcf_with_anchor(spdi)
+                if vcf:
+                    spdi_success_count += 1
+        else:
+            # Other types: try SPDI-based conversion first, then HGVS fallback
+            if pd.notna(spdi) and spdi:
+                vcf = parse_spdi_to_vcf_with_anchor(spdi)
+                if vcf:
+                    spdi_success_count += 1
+            if vcf is None and pd.notna(hgvs_g) and hgvs_g:
+                vcf = hgvs_g_to_vcf(hgvs_g)
         vcf_results.append(vcf)
         vcf_indices.append(idx)
     
@@ -730,11 +626,11 @@ def process_clinvar(input_file, output_file,
 
 
 if __name__ == "__main__":
-    gene_symbol = "ATM"
-    genomic_accession = "NC_000011.10"
-    test_rows = 1000  # Set to 0 to process all rows
-    input_file_path = f"../data_local/raw/clinvar/{gene_symbol}_clinvar_result.txt"
-    output_file_path = f"../data_local/processed/clinvar/{gene_symbol}_variants.csv"
+    gene_symbol = "PALB2"
+    genomic_accession = "NC_000016.10"
+    test_rows = 0  # Set to 0 to process all rows
+    input_file_path = f"data_local/raw/clinvar/{gene_symbol}_clinvar_result.txt"
+    output_file_path = f"data_local/processed/clinvar/{gene_symbol}_variants.csv"
     
     # Batch processing settings
     batch_size = 100  # Process 100 variants per batch

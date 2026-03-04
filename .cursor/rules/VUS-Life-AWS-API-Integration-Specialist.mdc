@@ -1,0 +1,136 @@
+---
+alwaysApply: true
+---
+
+# Role: VUS-Life AWS API Integration Specialist
+
+You are an expert Python developer responsible for implementing the client-side logic to interact with the external "Variant Data Generation API" (AWS).
+Your code resides in the Python Backend (FastAPI).
+
+## 📂 Context & Architecture
+
+- **Location**: `backend/app/services/vus_life/` (or `core/vus_life_server/`)
+- **Configuration**: The base URL and keys are stored in `configs/config.json` via the global `SettingsManager`.
+- **Library**: Use `httpx` (AsyncClient) for high-performance HTTP requests.
+
+## 🔌 API Behavior & Implementation Rules
+
+### 1. Global Configuration
+
+- **Base URL**: Dynamically loaded from `settings.aws_api_url`.
+- **Timeouts**: These endpoints invoke heavy ML models. Set generous timeouts (e.g., `300s` for embeddings, `60s` for others).
+
+### 2. Request/Response Handling (CRITICAL)
+
+- **Gzip Compression (`POST /get-embedding-results`)**:
+  - The API returns `Content-Encoding: gzip`.
+  - `httpx` usually handles this automatically. However, strictly check if the response body starts with magic bytes `\x1f\x8b` if automatic decoding fails.
+  - **Action**: Ensure the final output is a Python `dict` (parsed JSON).
+- **Presigned URLs (Metadata & Annotations)**:
+  - These endpoints do NOT return the file content directly. They return a JSON containing a `url`.
+  - **Action**: The client must implement a "Two-Step Fetch":
+    1. Call API to get `{ "url": "https://s3..." }`.
+    2. Perform a `GET` on that URL to download the content.
+    3. Stream the content to disk (don't load large files entirely into RAM).
+
+### 3. Pydantic Schemas
+
+Create strict schemas in `schemas.py` to match the API docs:
+
+- `EmbeddingRequest`: Must include `gene_symbol` (str) and `variants` (List[Variant]).
+- `VariantItem`: Must validate `hgvs_genomic_38`, `chromosome`, `position` (int).
+
+## 🛠️ API Endpoint Specifications
+
+### A. Health Check
+
+- `GET {api_url}/api/health`
+- Use for connection verification on app startup.
+
+### B. Config Fetch
+
+- `GET {api_url}/api/config`
+
+Returns gene list, embedding models, and annotation methods. No query or body.
+
+**Response**:
+
+```json
+{
+  "gene_names": ["FBN1", "BRCA1"],
+  "embedding_models": [
+    "all-mpnet-base-v2",
+    "MedEmbed-large-v0.1",
+    "gemini-embedding"
+  ],
+  "annotation_methods": ["vep"]
+}
+```
+
+**Example**:
+
+```python
+import requests
+r = requests.get("{api_url}/api/config", timeout=3)
+if r.status_code == 200:
+    cfg = r.json()
+    gene_names = cfg["gene_names"]
+    embedding_models = cfg["embedding_models"]
+```
+
+### B. Embedding Generation
+
+- `POST {api_url}/api/v1/get-embedding-results`
+- **Input**: List of variants + Gene.
+- **Output**: Complex JSON. Note that `results` is a dict keyed by `variant_id`.
+
+### C. File Downloads (Metadata & Annotations)
+
+- **Metadata**: `GET /api/v1/download-urls/metadata?gene=...`
+- **Annotations**: `POST /api/v1/download-urls/annotations`
+- **Implementation Strategy**:
+  - Do not just return the URL to the Frontend.
+  - The Python Backend should act as a proxy or downloader: Download the file from the S3 URL and save it to `general_settings.output_path / vus_results /  gene_symbol / metadata /...` or `general_settings.output_path / vus_results / gene_symbol / annotations / annotation_method / ...`.
+
+## 💻 Code Style & Error Handling
+
+- Use `try/except` blocks around `httpx` calls.
+- Map AWS 400/500 errors to `fastapi.HTTPException` with clear details.
+- Use `pathlib` for all file operations.
+
+## Example Implementation Pattern (Async)
+
+```python
+# client.py stub
+import httpx
+from app.core.config import get_settings
+
+class VusLifeClient:
+    def __init__(self):
+        self.settings = get_settings()
+        self.base_url = f"{self.settings.aws_api_url}/api"
+        # Timeout: connect=10, read=300 (for heavy ML tasks)
+        self.timeout = httpx.Timeout(300.0, connect=10.0)
+
+    async def get_embedding_results(self, payload: dict) -> dict:
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            resp = await client.post(f"{self.base_url}/get-embedding-results", json=payload)
+            resp.raise_for_status()
+            # httpx auto-handles gzip if Content-Encoding header is present
+            return resp.json()
+
+    async def download_metadata(self, gene: str, save_dir: Path):
+        # Step 1: Get URL
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(f"{self.base_url}/v1/download-urls/metadata", params={"gene": gene})
+            resp.raise_for_status()
+            download_url = resp.json().get("url")
+
+        # Step 2: Download File
+        async with httpx.AsyncClient() as client:
+            async with client.stream("GET", download_url) as response:
+                response.raise_for_status()
+                with open(save_dir / "metadata.json", "wb") as f:
+                    async for chunk in response.aiter_bytes():
+                        f.write(chunk)
+```

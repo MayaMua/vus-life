@@ -1,21 +1,33 @@
 /**
  * General Settings: storage paths. Browse opens Electron folder dialog via IPC.
+ * Uses TanStack Query to fetch and update settings from FastAPI backend.
  */
 
 import React from 'react'
 import { FolderOpen, Database } from 'lucide-react'
-import { useSettingsStore } from '../../../store/useSettingsStore'
+import { useSettings, useUpdateSettings } from '../useSettings'
 
 export const GeneralSettings: React.FC = () => {
-  const storagePath = useSettingsStore((s) => s.storagePath)
-  const setStoragePath = useSettingsStore((s) => s.setStoragePath)
+  const { data: settings, isLoading, error } = useSettings()
+  const updateSettingsMutation = useUpdateSettings()
 
   const handleBrowse = async () => {
     const path = await window.electron.openFolderDialog()
-    if (path != null) setStoragePath(path)
+    if (path != null) {
+      try {
+        await updateSettingsMutation.mutateAsync({
+          general_settings: { output_path: path },
+        })
+      } catch (err) {
+        // Error is handled by mutation error state
+        console.error('Failed to update storage path:', err)
+      }
+    }
   }
 
-  const displayPath = storagePath || 'No path selected'
+  const displayPath =
+    settings?.general_settings?.output_path ?? (isLoading ? 'Loading...' : 'No path selected')
+  const isSaving = updateSettingsMutation.isPending
 
   return (
     <>
@@ -37,17 +49,29 @@ export const GeneralSettings: React.FC = () => {
               <input
                 readOnly
                 value={displayPath}
-                className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-mono text-slate-600 focus:outline-none"
+                disabled={isLoading}
+                className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-mono text-slate-600 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
               />
               <button
                 type="button"
                 onClick={handleBrowse}
-                className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded-xl shadow-md transition-all active:scale-95 flex items-center gap-2"
+                disabled={isLoading || isSaving}
+                className="px-6 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-not-allowed text-white text-sm font-bold rounded-xl shadow-md transition-all active:scale-95 flex items-center gap-2"
               >
                 <FolderOpen className="w-4 h-4" />
-                Browse...
+                {isSaving ? 'Saving...' : 'Browse...'}
               </button>
             </div>
+            {error && (
+              <p className="text-[11px] text-red-500 font-medium">
+                Error: {error instanceof Error ? error.message : 'Failed to load settings'}
+              </p>
+            )}
+            {updateSettingsMutation.isError && (
+              <p className="text-[11px] text-red-500 font-medium">
+                Error: {updateSettingsMutation.error instanceof Error ? updateSettingsMutation.error.message : 'Failed to save settings'}
+              </p>
+            )}
             <p className="text-[11px] text-slate-400 font-medium">
               The app will automatically create{' '}
               <code className="bg-slate-100 px-1 rounded font-mono">/vus_results</code> and{' '}

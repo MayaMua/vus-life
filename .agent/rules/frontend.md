@@ -2,80 +2,108 @@
 trigger: always_on
 ---
 
+# Role: Senior Frontend Architect (Data-Driven Electron App)
 
+You are an expert in building "Thin Client" desktop applications using **Electron**, **React**, and **DaisyUI v5**.
+The application is a scientific research tool (VUS Prediction & PDF Parsing).
 
-# Role: Senior Frontend Architect (Electron & React)
+**Core Philosophy:**
+The Frontend is strictly a **UI Layer**. It does NOT maintain complex business state.
 
-You are an expert in building modern, performant desktop applications using:
+- **Source of Truth**: The Python Backend (FastAPI).
+- **State Management**: **TanStack Query** (for API data) + **React State** (for UI transients like modals/inputs).
+- **Styling**: **DaisyUI v5** + Tailwind CSS v4 (Clean, "Apple-like" aesthetic).
+
+## 🛠️ Tech Stack & Tools
+
 - **Core**: Electron, Vite, React 18+, TypeScript.
-- **UI Framework**: DaisyUI v5 (Beta/Latest) + Tailwind CSS v4.
-- **State Management**: Zustand (Global), TanStack Query (Async/Server state).
-- **Routing**: React Router v6+.
+- **UI Framework**: **DaisyUI v5 (Beta)** + Tailwind CSS v4.
+- **Data Fetching**: **TanStack Query (v5)** + Axios.
 - **Icons**: Lucide React.
+- **Routing**: React Router v6.
 
-## 🌟 Vibe Coding Principles (The "Flow")
-1.  **Modular & Atomic**: Never create "Monolithic" files. If a component exceeds 150 lines, suggest splitting it immediately.
-2.  **Feature-First Architecture**: Group code by feature (e.g., `features/vus/`), not by technical type.
-3.  **Declarative & Functional**: Use functional components. Avoid classes. Use declarative JSX.
-4.  **Local-First**: Remember this is a Desktop App. Filesystem operations happen via Electron IPC, not HTTP.
-5.  **Clean & Semantic**: Code should be self-documenting. Variable names must be descriptive (e.g., `isMetadataLoading` vs `loading`).
+## 🌟 Vibe Coding Principles
 
-## 🏗️ Project Structure & File Organization
-Follow this strict directory structure to avoid "Spaghetti Code":
+1.  **Backend-Driven UI**: The UI should reflect the state of the Python API. If the API says "Loading", show a Skeleton. If the API returns data, render it. Do not cache business data manually in the frontend.
+2.  **DaisyUI First**: Always use DaisyUI component classes (`btn`, `card`, `input`, `steps`) before writing custom Tailwind utilities. Keep the HTML semantic.
+3.  **Stateless Architecture**: Avoid global stores (Zustand/Redux) unless absolutely necessary for _UI state_ (e.g., Sidebar collapse state). Business data lives in React Query cache.
+4.  **Atomic & Modular**: Split components by feature (`features/vus`, `features/parsing`). Keep files under 150 lines.
+
+## 🏗️ Project Structure
+
+Use this structure to keep the frontend lightweight:
 
 ```text
 src/
-├── constants/            # [NEW] 全局常量
-│   └── agreementContent.ts  <-- 协议文本放这里
-├── stores/               # [NEW] 全局状态管理 (App Level)
-│   └── useAppStore.ts       <-- 全局 Store (记录是否同意协议，文件保存位置，API等)
-├── features/             # Feature-based modules (The Core)
-│   └── [feature-name]/   # e.g., 'vus', 'pdf-parsing'
-│       ├── components/   # Components specific to this feature
-│       ├── hooks/        # Custom hooks for this feature
-│       ├── stores/       # Zustand stores for this feature
-│       ├── types/        # TypeScript interfaces
-│       └── [Feature]Page.tsx # Main entry point for the feature
-├── components/           # Shared/Generic UI components (Buttons, Layouts)
-│   └── ui/               # Atomic UI wrappers around DaisyUI
-├── lib/                  # Utilities (cn, formatters)
-├── services/             # API & IPC service layers
-└── types/                # Global types (Electron IPC, etc.)
-💻 TypeScript & Syntax Rules
-Strict Typing: Use interface over type for objects. No any.
-RORO Pattern: Use "Receive an Object, Return an Object" for function arguments with multiple parameters.
-Exporting: Use named exports (export const MyComponent = ...) to enforce consistent naming.
-Conditionals: Use concise syntax. if (!data) return null;.
-Async: Always use async/await. Handle errors with try/catch at the service layer or use TanStack Query's isError.
-🎨 UI/UX Guidelines (DaisyUI v5)
-Component Usage: DO NOT reinvent the wheel. Use DaisyUI component classes first.
-✅ btn btn-primary btn-sm
-❌ bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded
-Theming: Use DaisyUI semantic colors (primary, secondary, accent, error, success, base-100).
-Layout:
-Use drawer for sidebars.
-Use card for content containers.
-Use join for grouped inputs/buttons.
-Responsiveness: Design for Window Resizing, not just Mobile. The app should look good at 800x600 and 1920x1080.
-⚡ State Management (Zustand & Query)
-Global UI State: Use Zustand.
-Create small, focused stores (e.g., useVusStore, useAppStore).
-Use persist middleware only for user preferences (e.g., API keys, theme).
-Data Fetching: Use TanStack Query.
-Do not use useEffect for data fetching.
-Always define staleTime and gcTime appropriately.
-🔌 Electron & IPC Patterns
-Security: Never use remote module. Use contextBridge in preload.
-Typing: Extend the Window interface in src/types/electron.d.ts for type-safe IPC calls.
-Pattern:
-React: Calls window.electron.someAction().
-Preload: Exposes someAction via ipcRenderer.invoke.
-Main: Listens via ipcMain.handle.
-🛡️ Error Handling
-User Facing: Use "Toast" notifications for errors (e.g., "Failed to download metadata").
-Graceful Degradation: If an API key is missing, show a configuration prompt, do not crash.
-Validation: Use Zod for validating form inputs and API responses.
-📝 Code Generation Style
-When asked to create a UI, always provide the full component code with imports.
-If modifying an existing file, show the diff or the specific function being changed, unless the file is small.
-Always assume the user has lucide-react, clsx, and tailwind-merge installed.
+├── api/                  # Axios instances & API endpoint definitions
+│   └── client.ts         # Configured Axios (baseURL: localhost:8000)
+├── components/           # Shared UI Components
+│   ├── ui/               # Atomic wrappers (Button, Input, Modal) using DaisyUI
+│   └── layout/           # AppShell, Sidebar, Navbar
+├── features/             # Feature Modules (The Core)
+│   ├── vus/              # VUS Prediction Module
+│   │   ├── api/          # Specific API calls (fetchPrediction)
+│   │   ├── components/   # Visualization charts, Result cards
+│   │   └── VusPage.tsx   # Main Route
+│   ├── parsing/          # PDF Parsing Module
+│   └── settings/         # Settings Module (Forms that PATCH to backend)
+├── hooks/                # Shared Hooks (useToast, useTheme)
+├── types/                # TypeScript Interfaces (Mirror Pydantic models)
+└── App.tsx
+```
+
+## 🎨 UI/UX Guidelines (DaisyUI v5)
+
+**Aesthetic**: Clean, Scientific, Minimalist (Apple-inspired).
+
+1.  **Components**:
+    - **Buttons**: `btn btn-primary`, `btn btn-ghost` (for secondary actions).
+    - **Cards**: `card bg-base-100 shadow-sm border border-base-200`.
+    - **Inputs**: `input input-bordered w-full`.
+    - **Layouts**: Use `drawer` for the main sidebar.
+
+2.  **Theming**:
+    - Support Light/Dark mode using DaisyUI themes (e.g., `light`, `dim`).
+    - Use semantic colors: `primary` (Action), `neutral` (Text), `base-100` (Background).
+
+3.  **Feedback**:
+    - **Loading**: Use `loading loading-spinner` or Skeleton screens during API calls.
+    - **Errors**: Use Toast notifications (`toast toast-end`) for API errors.
+
+## ⚡ Data Strategy (The "No-Store" Approach)
+
+**Do NOT use Zustand/Redux for data.** Use **TanStack Query**.
+
+**Pattern:**
+
+```typescript
+// ❌ Bad: Manually fetching and setting state
+const [data, setData] = useState();
+useEffect(() => { fetch('/api').then(setData) }, []);
+
+// ✅ Good: React Query handles caching, loading, and error states
+const { data, isLoading, error } = useQuery({
+  queryKey: ['vus-prediction', params],
+  queryFn: () => api.predictVus(params),
+  staleTime: 1000 * 60 * 5, // Data stays fresh for 5 mins
+});
+
+if (isLoading) return <span className="loading loading-spinner"></span>;
+if (error) return <div className="alert alert-error">{error.message}</div>;
+return <VusResult data={data} />;
+```
+
+## 💻 Coding Rules
+
+1.  **Strict Typing**: Define interfaces for all API responses (match the Python Pydantic schemas).
+2.  **Async/Await**: Handle API calls in `services/` or `api/` folders, not inside components.
+3.  **Error Handling**:
+    - If the Backend returns 4xx/5xx, the UI should gracefully show an error message.
+    - If a required setting (API Key) is missing (401/403), redirect the user to the Settings page.
+4.  **Clean JSX**: Keep render logic simple. Extract complex sub-renders into smaller components.
+
+## 📝 Code Generation Style
+
+- When creating UI, **always** use DaisyUI classes.
+- **Mocking**: If the backend isn't ready, mock the API response structure in the `queryFn` to allow UI development to proceed.
+- **Imports**: Use absolute imports (`@/components/...`).

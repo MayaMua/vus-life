@@ -21,16 +21,18 @@ function NavItem({
   onTabChange,
   icon: Icon,
   label,
+  liClassName = '',
 }: {
   tab: AppTab
   activeTab: AppTab
   onTabChange: (tab: AppTab) => void
   icon: React.ComponentType<{ className?: string }>
   label: string
+  liClassName?: string
 }) {
   const isActive = activeTab === tab
   return (
-    <li>
+    <li className={liClassName}>
       <a
         href="#"
         role="button"
@@ -57,9 +59,14 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, onTabChange }) => {
       <ul className="flex flex-col items-center gap-4 p-2 flex-1 min-h-0 w-full">
         <NavItem tab="vus" activeTab={activeTab} onTabChange={onTabChange} icon={Dna} label="VUS Prediction" />
         <NavItem tab="pdf" activeTab={activeTab} onTabChange={onTabChange} icon={FileText} label="PDF Parser" />
-        <li className="mt-auto pt-2 border-t border-[#E5E7EB] w-full flex justify-center">
-          <NavItem tab="settings" activeTab={activeTab} onTabChange={onTabChange} icon={Settings} label="Settings" />
-        </li>
+        <NavItem
+          tab="settings"
+          activeTab={activeTab}
+          onTabChange={onTabChange}
+          icon={Settings}
+          label="Settings"
+          liClassName="mt-auto pt-2 border-t border-[#E5E7EB] w-full flex justify-center"
+        />
       </ul>
     </nav>
   )

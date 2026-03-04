@@ -1,78 +1,63 @@
 /**
- * VUS API URL and Verify; uses useVusApiStore and verifyVusConnection.
- * Contains full verification logic with AbortController timeout; shows ConnectionStatusModal.
+ * VUS API URL and Verify. Reads/updates API URL via FastAPI (GET/PATCH /api/settings).
+ * Verify calls backend GET /api/vus/verify; backend reads URL from config and validates via /health.
  */
 
-import React from 'react'
+import React, { useState, useEffect } from 'react'
 import { Globe, Zap, Activity, Info } from 'lucide-react'
-import { useVusApiStore } from '../../../store/useVusApiStore'
-import { ConnectionStatusModal } from './ConnectionStatusModal'
-
-const VERIFY_TIMEOUT_MS = 8000
+import { verifyVusConnection as verifyVusConnectionApi } from '../../../api/endpoints'
+import { useSettings, useUpdateSettings } from '../useSettings'
+import { ConnectionStatusModal, type ConnectionStatusType } from './ConnectionStatusModal'
 
 export const VusApiSettings: React.FC = () => {
-  const apiUrl = useVusApiStore((s) => s.apiUrl)
-  const setApiUrl = useVusApiStore((s) => s.setApiUrl)
-  const isVerifying = useVusApiStore((s) => s.isVerifying)
-  const connectionType = useVusApiStore((s) => s.connectionType)
-  const connectionMessage = useVusApiStore((s) => s.connectionMessage)
-  const setConnectionStatus = useVusApiStore((s) => s.setConnectionStatus)
-  const clearConnectionStatus = useVusApiStore((s) => s.clearConnectionStatus)
-  const setVerifying = useVusApiStore((s) => s.setVerifying)
+  const { data: settings, isLoading } = useSettings()
+  const updateSettingsMutation = useUpdateSettings()
 
-  const verifyVusConnection = async () => {
-    const trimmedUrl = apiUrl.trim().replace(/\/$/, '')
+  const apiUrlFromApi = settings?.vus_api_settings?.api_url ?? ''
+  const [localApiUrl, setLocalApiUrl] = useState(apiUrlFromApi)
+  useEffect(() => {
+    setLocalApiUrl(apiUrlFromApi)
+  }, [apiUrlFromApi])
+
+  const [isVerifying, setVerifying] = useState(false)
+  const [connectionType, setConnectionType] = useState<ConnectionStatusType>(null)
+  const [connectionMessage, setConnectionMessage] = useState('')
+
+  const setConnectionStatus = (
+    _connected: boolean,
+    message: string,
+    type: ConnectionStatusType
+  ): void => {
+    setConnectionMessage(message)
+    setConnectionType(type)
+  }
+  const clearConnectionStatus = (): void => {
+    setConnectionMessage('')
+    setConnectionType(null)
+  }
+
+  const handleApiUrlBlur = (): void => {
+    const trimmed = localApiUrl.trim().replace(/\/$/, '')
+    if (trimmed === apiUrlFromApi.trim().replace(/\/$/, '')) return
+    updateSettingsMutation.mutateAsync({ vus_api_settings: { api_url: trimmed } }).catch(() => {})
+  }
+
+  const verifyVusConnection = async (): Promise<void> => {
     setVerifying(true)
     clearConnectionStatus()
 
     try {
-      const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), VERIFY_TIMEOUT_MS)
-
-      const response = await fetch(`${trimmedUrl}/health`, {
-        method: 'GET',
-        signal: controller.signal,
-        headers: {
-          Accept: 'application/json',
-          'ngrok-skip-browser-warning': 'true',
-        },
-      })
-
-      clearTimeout(timeoutId)
-
-      if (response.ok) {
-        const contentType = response.headers.get('content-type')
-        if (!contentType || !contentType.includes('application/json')) {
-          throw new Error(
-            'Received non-JSON response. Ensure the URL is correct and the server is running.'
-          )
-        }
-
-        const data = (await response.json()) as { status?: string; service?: string }
-        if (data.status === 'healthy') {
-          setConnectionStatus(
-            true,
-            `Connection Successful! Service: ${data.service ?? 'vus-life-server'}`,
-            'success'
-          )
-        } else {
-          throw new Error('Service reported unhealthy status.')
-        }
-      } else {
-        const errorText = await response.text().catch(() => 'Unknown error')
-        throw new Error(`Server error (${response.status}): ${errorText.slice(0, 50)}...`)
-      }
+      const data = await verifyVusConnectionApi()
+      setConnectionStatus(
+        true,
+        `Connection Successful! Service: ${data.service ?? 'vus-life-server'}`,
+        'success'
+      )
     } catch (err: unknown) {
-      let msg = 'Failed to connect.'
-      if (err instanceof Error) {
-        if (err.name === 'AbortError') {
-          msg = 'Connection timed out (8s). The server might be offline.'
-        } else if (err instanceof TypeError) {
-          msg = 'Network error or CORS block. Check if the server allows cross-origin requests.'
-        } else {
-          msg = err.message
-        }
-      }
+      const msg =
+        err instanceof Error
+          ? err.message
+          : 'Failed to connect. Check that the URL is saved and the backend is running.'
       setConnectionStatus(false, msg, 'error')
     } finally {
       setVerifying(false)
@@ -98,7 +83,9 @@ export const VusApiSettings: React.FC = () => {
       <section className="space-y-6">
         <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
           <Activity className="w-4 h-4 text-emerald-500" />
-          <h3 className="text-sm font-bold text-slate-800 uppercase tracking-tight">API Configuration</h3>
+          <h3 className="text-sm font-bold text-slate-800 uppercase tracking-tight">
+            API Configuration
+          </h3>
         </div>
 
         <div className="bg-slate-50 rounded-2xl p-6 border border-slate-100 space-y-6">
@@ -110,16 +97,18 @@ export const VusApiSettings: React.FC = () => {
               <div className="relative flex-1">
                 <Globe className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                 <input
-                  value={apiUrl}
-                  onChange={(e) => setApiUrl(e.target.value)}
+                  value={localApiUrl}
+                  onChange={(e) => setLocalApiUrl(e.target.value)}
+                  onBlur={handleApiUrlBlur}
+                  disabled={isLoading}
                   placeholder="https://your-api-server.com"
-                  className="w-full bg-white border border-slate-200 rounded-xl pl-10 pr-4 py-3 text-sm font-mono text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 shadow-inner transition-all"
+                  className="w-full bg-white border border-slate-200 rounded-xl pl-10 pr-4 py-3 text-sm font-mono text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/20 shadow-inner transition-all disabled:opacity-50"
                 />
               </div>
               <button
                 type="button"
                 onClick={verifyVusConnection}
-                disabled={isVerifying || !apiUrl.trim()}
+                disabled={isVerifying || !apiUrlFromApi.trim()}
                 className={`px-8 py-3 rounded-xl text-sm font-bold transition-all flex items-center gap-2 shadow-sm ${
                   isVerifying
                     ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
@@ -151,10 +140,11 @@ export const VusApiSettings: React.FC = () => {
               </p>
               <p className="text-xs text-blue-800 leading-relaxed font-medium">
                 The VUS Prediction module uses this endpoint to process HGVS strings. If using{' '}
-                <span className="font-bold">ngrok</span>, ensure the tunnel is active. The verify tool
-                checks the{' '}
-                <code className="bg-blue-100/50 px-1 rounded font-mono">/health</code> endpoint for a
-                successful heartbeat.
+                <span className="font-bold">ngrok</span>, ensure the tunnel is active. Verify uses
+                the <strong>saved</strong> URL from settings (save with the input field first). The
+                backend checks the{' '}
+                <code className="bg-blue-100/50 px-1 rounded font-mono">/api/health</code> endpoint
+                for a successful heartbeat.
               </p>
             </div>
           </div>

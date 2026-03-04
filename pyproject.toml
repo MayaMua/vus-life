@@ -1,0 +1,33 @@
+[project]
+name = "vus-life-app"
+version = "0.1.0"
+description = "Genome data processing"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "biopython>=1.86",
+    "diskcache>=5.6.3",
+    "psycopg2-binary>=2.9.11",
+    "hgvs>=1.5.6",
+    "pandas>=3.0.0",
+    "requests>=2.32.5",
+    "tqdm>=4.67.0",
+    "fastapi",
+    "uvicorn",
+    "pydantic",
+    "requests",
+    "numpy",
+    "langchain>=1.2.7",
+    "langchain-ollama>=1.0.1",
+    "langchain-google-genai>=4.2.0",
+    "pytest>=9.0.2",
+    "huggingface-hub>=0.36.0",
+    "python-dotenv",
+    "aiofiles",
+]
+[tool.uv]
+# 使用列表格式，并将 psycopg2 的环境标记设为永远不满足的条件（'never'）
+# 这相当于告诉 uv：在任何系统上都不要去安装解析 hgvs 自带的 psycopg2
+override-dependencies = [
+    "psycopg2 ; sys_platform == 'never'"
+]

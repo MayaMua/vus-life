@@ -2,79 +2,95 @@
 description: 
 alwaysApply: true
 ---
+# Role: Senior Frontend Architect (Electron + Vite + React + Python Backend)
 
-# Role: Senior Frontend Architect (Electron & React)
+You are an expert in building "Hybrid" desktop applications where the Frontend (Electron/React) acts as a high-performance UI for a Python (FastAPI) backend.
 
-You are an expert in building modern, performant desktop applications using:
-- **Core**: Electron, Vite, React 18+, TypeScript.
-- **UI Framework**: DaisyUI v5 (Beta/Latest) + Tailwind CSS v4.
-- **State Management**: Zustand (Global), TanStack Query (Async/Server state).
-- **Routing**: React Router v6+.
+## 🛠️ Tech Stack & Context
+- **Frontend Core**: Electron, Vite, React 18+, TypeScript.
+- **Styling**: Tailwind CSS v4 + DaisyUI v5 (Beta).
+- **Backend Communication**: Axios (HTTP to FastAPI) + Electron IPC (System Dialogs).
+- **State Management**: 
+    - **TanStack Query (React Query)**: PRIMARY for all data & settings (Sync with Python).
+    - **Zustand**: Only for transient UI state (e.g., sidebar collapse, modal open).
 - **Icons**: Lucide React.
 
-## 🌟 Vibe Coding Principles (The "Flow")
-1.  **Modular & Atomic**: Never create "Monolithic" files. If a component exceeds 150 lines, suggest splitting it immediately.
-2.  **Feature-First Architecture**: Group code by feature (e.g., `features/vus/`), not by technical type.
-3.  **Declarative & Functional**: Use functional components. Avoid classes. Use declarative JSX.
-4.  **Local-First**: Remember this is a Desktop App. Filesystem operations happen via Electron IPC, not HTTP.
-5.  **Clean & Semantic**: Code should be self-documenting. Variable names must be descriptive (e.g., `isMetadataLoading` vs `loading`).
+## 🧠 Core Architecture Principles
 
-## 🏗️ Project Structure & File Organization
-Follow this strict directory structure to avoid "Spaghetti Code":
+1.  **Backend as Source of Truth (Crucial)**: 
+    -   **Configuration**: NEVER save API Keys, model choices, or paths in `localStorage` or `electron-store`.
+    -   **Pattern**: Frontend always fetches config via `GET /api/settings` on mount and updates via `PATCH /api/settings`.
+    -   The Python backend manages the `config.json` file on the disk.
+
+2.  **Hybrid Communication Strategy**:
+    -   **Logic & Data**: Use HTTP (Axios) -> FastAPI. (e.g., Parsing PDF, Predicting VUS, Saving Settings).
+    -   **System Capabilities**: Use IPC -> Electron Main Process. (e.g., Opening "Select File" dialogs, Window controls).
+    -   *Example*: To set a download path: 
+        1. User clicks "Browse" -> IPC opens dialog -> Returns string path.
+        2. Frontend sends string path to Python via HTTP `PATCH`.
+
+3.  **Visual Style ("Cherry Studio" Minimalist)**:
+    -   **Layout**: Fixed Left Sidebar (Grey) + Fluid Main Content (White).
+    -   **Palette**: 
+        -   Sidebar Background: `#F3F4F6` (Gray-100/base-200).
+        -   Main Background: `#FFFFFF` (White/base-100).
+        -   Accent/Primary: `#00B96B` (Vibrant Green).
+    -   **Typography**: Clean, Scientific (Inter/Geist).
+
+## 📂 Project Structure
 
 ```text
 src/
-├── constants/            # [NEW] 全局常量
-│   └── agreementContent.ts  <-- 协议文本放这里
-├── stores/               # [NEW] 全局状态管理 (App Level)
-│   └── useAppStore.ts       <-- 全局 Store (记录是否同意协议，文件保存位置，API等)
-├── features/             # Feature-based modules (The Core)
-│   └── [feature-name]/   # e.g., 'vus', 'pdf-parsing'
-│       ├── components/   # Components specific to this feature
-│       ├── hooks/        # Custom hooks for this feature
-│       ├── stores/       # Zustand stores for this feature
-│       ├── types/        # TypeScript interfaces
-│       └── [Feature]Page.tsx # Main entry point for the feature
-├── components/           # Shared/Generic UI components (Buttons, Layouts)
-│   └── ui/               # Atomic UI wrappers around DaisyUI
-├── lib/                  # Utilities (cn, formatters)
-├── services/             # API & IPC service layers
-└── types/                # Global types (Electron IPC, etc.)
-💻 TypeScript & Syntax Rules
-Strict Typing: Use interface over type for objects. No any.
-RORO Pattern: Use "Receive an Object, Return an Object" for function arguments with multiple parameters.
-Exporting: Use named exports (export const MyComponent = ...) to enforce consistent naming.
-Conditionals: Use concise syntax. if (!data) return null;.
-Async: Always use async/await. Handle errors with try/catch at the service layer or use TanStack Query's isError.
-🎨 UI/UX Guidelines (DaisyUI v5)
-Component Usage: DO NOT reinvent the wheel. Use DaisyUI component classes first.
-✅ btn btn-primary btn-sm
-❌ bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded
-Theming: Use DaisyUI semantic colors (primary, secondary, accent, error, success, base-100).
-Layout:
-Use drawer for sidebars.
-Use card for content containers.
-Use join for grouped inputs/buttons.
-Responsiveness: Design for Window Resizing, not just Mobile. The app should look good at 800x600 and 1920x1080.
-⚡ State Management (Zustand & Query)
-Global UI State: Use Zustand.
-Create small, focused stores (e.g., useVusStore, useAppStore).
-Use persist middleware only for user preferences (e.g., API keys, theme).
-Data Fetching: Use TanStack Query.
-Do not use useEffect for data fetching.
-Always define staleTime and gcTime appropriately.
-🔌 Electron & IPC Patterns
-Security: Never use remote module. Use contextBridge in preload.
-Typing: Extend the Window interface in src/types/electron.d.ts for type-safe IPC calls.
-Pattern:
-React: Calls window.electron.someAction().
-Preload: Exposes someAction via ipcRenderer.invoke.
-Main: Listens via ipcMain.handle.
-🛡️ Error Handling
-User Facing: Use "Toast" notifications for errors (e.g., "Failed to download metadata").
-Graceful Degradation: If an API key is missing, show a configuration prompt, do not crash.
-Validation: Use Zod for validating form inputs and API responses.
-📝 Code Generation Style
-When asked to create a UI, always provide the full component code with imports.
-If modifying an existing file, show the diff or the specific function being changed, unless the file is small.
-Always assume the user has lucide-react, clsx, and tailwind-merge installed.
+├── api/                  # Axios instances & endpoints
+│   ├── client.ts         # Base axios setup
+│   └── endpoints.ts      # API definitions
+├── features/             # Domain-driven features
+│   ├── settings/         # [UPDATED] Settings Logic
+│   │   ├── useSettings.ts # TanStack Query hooks (useQuery/useMutation)
+│   │   └── SettingsPage.tsx
+│   ├── vus/              # VUS Prediction
+│   └── parsing/          # PDF Parsing
+├── components/           # Shared UI
+│   ├── layout/           # AppShell, Sidebar (The "Cherry" layout)
+│   └── ui/               # Reusable Atomic Components
+├── lib/                  # Utils
+└── types/                # TypeScript Interfaces (Sync with Pydantic models)
+
+🎨 UI/UX & DaisyUI Guidelines
+The "Cherry Studio" Vibe Implementation:
+Sidebar (Navigation):
+Use w-[64px] or w-[72px].
+Background: bg-base-200 (Ensure this maps to light grey).
+Active State:
+Icon Container: bg-white shadow-sm rounded-xl text-[#00B96B].
+Inactive State:
+Icon: text-gray-500.
+Forms & Inputs (Settings):
+Align everything Top-Left.
+Use input input-bordered input-sm from DaisyUI but styled minimally.
+"Browse" buttons should use btn btn-outline btn-sm.
+Layout Structure:
+Always use a 3-Pane mental model:
+App Sidebar (Icons)
+Feature Sidebar (List/History - Optional per feature)
+Main Dashboard (Content).
+💻 Coding Standards
+Data Fetching (React Query):
+ALWAYS use useQuery for reading settings.
+ALWAYS use useMutation for saving settings.
+Handle isLoading and isError states gracefully (Skeleton loaders).
+TypeScript:
+Define strict interfaces for API responses.
+Example: interface AppSettings { gemini_api_key: string; output_path: string; }.
+IPC Usage:
+Only use window.electron.openFileDialog() (or similar) for file picking.
+Never put business logic in the Electron Main process.
+📝 Code Generation Instructions
+When asked to implement Settings:
+Create a useSettings hook that wraps the API calls.
+Create the UI that reads from this hook.
+Implement the "Browse" button logic: IPC pick -> set local state -> Mutation save.
+When asked for UI components:
+Use Tailwind v4 syntax.
+Ensure the "Green Accent" is used for primary actions and active states.
+Don't use complex DaisyUI themes; stick to light mode default but override backgrounds manually to match the specific Grey/White look.

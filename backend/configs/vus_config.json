@@ -1,0 +1,25 @@
+{
+  "vus_dashboard_settings": {
+    "gene_names": [
+      "ATM",
+      "PALB2",
+      "FBN1",
+      "BRCA1",
+      "BRCA2",
+      "USH2A"
+    ],
+    "embedding_models": [
+      "all-mpnet-base-v2",
+      "MedEmbed-large-v0.1",
+      "gemini-embedding"
+    ],
+    "annotation_methods": [
+      "vep"
+    ]
+  },
+  "vus_api_settings": {
+    "api_url": "http://vus.life/api"
+  },
+  "vus_llm_settings": "my_vus_model"
+}
+

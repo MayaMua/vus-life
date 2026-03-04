@@ -5,7 +5,8 @@
 
 import React from 'react'
 import { Check, X } from 'lucide-react'
-import type { ConnectionStatusType } from '../../../store/useVusApiStore'
+
+export type ConnectionStatusType = 'success' | 'error' | null
 
 interface ConnectionStatusModalProps {
   visible: boolean
