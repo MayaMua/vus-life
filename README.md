@@ -29,7 +29,7 @@ To be the first to know when the desktop app drops, click the "Watch" button at 
 
 ### 📜 Read The Paper
 
-For a deep dive into how it all works, you can read our full paper [Link](https://www.medrxiv.org/content/10.1101/2025.08.08.25333318v1):
+For a deep dive into how it all works, you can read our full paper [Link](https://www.researchsquare.com/article/rs-8605164/v1):
 **Predicting Genetic Variant Pathogenicity Using Vector Embeddings**
 
 ### 📜 Patent
