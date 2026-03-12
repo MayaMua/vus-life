@@ -3,16 +3,19 @@
     "deepseek_official": {
       "base_url": "https://api.deepseek.com",
       "type": "openai"
+    },
+    "ollama": {
+      "base_url": "http://localhost:11434",
+      "type": "ollama"
     }
   },
   "instances": {
-    "my_research_model": {
-      "provider_key": "deepseek_official",
-      "api_key": "sk-123",
+    "test": {
+      "llm_factory": "ollama",
       "models": ["deepseek-chat"]
     },
     "my_coding_model": {
-      "provider_key": "deepseek_official",
+      "llm_factory": "deepseek_official",
       "api_key": "sk-456",
       "models": ["deepseek-coder"]
     }

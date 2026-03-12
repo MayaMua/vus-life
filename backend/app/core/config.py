@@ -188,18 +188,19 @@
 #     return manager
 
 
-# app/core/config.py
-
 import json
 import os
 from pathlib import Path
 from typing import Any, Optional
 from app.schemas.config import AppSettings
+from app.schemas.config.base import GeneralSettings
+from app.schemas.config.llm import ModelSettings
+from app.schemas.config.vus import VusApiSettings, VusDashboardSettings
 
 class SettingsManager:
     _instance: Optional["SettingsManager"] = None
     _config: Optional[AppSettings] = None
-    _config_path: Path
+    _config_dir: Path
     _initialized: bool = False
 
     def __new__(cls):
@@ -211,32 +212,55 @@ class SettingsManager:
     def _initialize(self):
         if self._initialized: return
         
-        # 1. 配置文件永远保存在固定的、独立于数据的主目录下
-        # Mac: /Users/user/.variant_insight/config.json
-        # Windows: C:\Users\user\.variant_insight\config.json
-        config_dir = Path.home() / ".variant_insight"
-        config_dir.mkdir(exist_ok=True)
-        self._config_path = config_dir / "config.json"
+        # Determine config directory (backend/configs)
+        backend_dir = Path(__file__).resolve().parent.parent.parent
+        self._config_dir = backend_dir / "configs"
+        self._config_dir.mkdir(parents=True, exist_ok=True)
+        
+        self._config = AppSettings()
+        
+        # Load multiple config files
+        general_path = self._config_dir / "general_config.json"
+        llm_path = self._config_dir / "llm_config.json"
+        vus_path = self._config_dir / "vus_config.json"
 
-        if self._config_path.exists():
+        # General Settings
+        if general_path.exists():
             try:
-                with open(self._config_path, "r") as f:
-                    data = json.load(f)
-                    self._config = AppSettings(**data)
+                with open(general_path, "r") as f:
+                    self._config.general_settings = GeneralSettings(**json.load(f))
             except Exception:
-                self._config = AppSettings()
-                self._save_to_disk()
+                self._save_to_disk("general")
         else:
-            self._config = AppSettings()
-            # 2. 如果是第一次创建，可以在这里通过代码设置默认的 output_path
-            # 为当前运行目录下的 data_local
-            default_data_dir = Path.cwd() / "configs"
-            default_data_dir.mkdir(parents=True, exist_ok=True)
+            default_data_dir = backend_dir / "configs"
             self._config.general_settings.output_path = str(default_data_dir)
-            self._save_to_disk()
+            self._save_to_disk("general")
+
+        # LLM Settings
+        if llm_path.exists():
+            try:
+                with open(llm_path, "r") as f:
+                    self._config.model_settings = ModelSettings(**json.load(f))
+            except Exception:
+                self._save_to_disk("llm")
+        else:
+            self._save_to_disk("llm")
+
+        # VUS Settings
+        if vus_path.exists():
+            try:
+                with open(vus_path, "r") as f:
+                    data = json.load(f)
+                    if "api_url" in data:
+                        self._config.vus_api_settings = VusApiSettings(**data)
+                    if "gene_names" in data:
+                        self._config.vus_dashboard_settings = VusDashboardSettings(**data)
+            except Exception:
+                self._save_to_disk("vus")
+        else:
+            self._save_to_disk("vus")
 
         self._initialized = True
-
 
     def get(self) -> AppSettings:
         if not self._initialized: self._initialize()
@@ -244,24 +268,38 @@ class SettingsManager:
 
     def update(self, updates: dict[str, Any]) -> AppSettings:
         """
-        支持深层更新 (Deep Update)
-        前端传来的 JSON 可能是 partial 的，比如只改了 deepseek 的 key
+        Supports deep updating nested partial data
         """
         if not self._initialized: self._initialize()
         
         current_data = self._config.model_dump()
-        
-        # 使用你之前的 _deep_merge 逻辑，或者使用第三方库如 deepmerge
         self._deep_merge(current_data, updates)
-        
-        # 重新验证并赋值
         self._config = AppSettings(**current_data)
-        self._save_to_disk()
+        
+        # Save specific files based on updates
+        if "general_settings" in updates:
+            self._save_to_disk("general")
+        if "model_settings" in updates:
+            self._save_to_disk("llm")
+        if "vus_api_settings" in updates or "vus_dashboard_settings" in updates:
+            self._save_to_disk("vus")
+            
         return self._config
 
-    def _save_to_disk(self):
-        with open(self._config_path, "w") as f:
-            f.write(self._config.model_dump_json(indent=2))
+    def _save_to_disk(self, section: str = "all"):
+        if section in ("all", "general"):
+            with open(self._config_dir / "general_config.json", "w") as f:
+                f.write(self._config.general_settings.model_dump_json(indent=2))
+        if section in ("all", "llm"):
+            with open(self._config_dir / "llm_config.json", "w") as f:
+                f.write(self._config.model_settings.model_dump_json(indent=2))
+        if section in ("all", "vus"):
+            combined_vus = {
+                **self._config.vus_api_settings.model_dump(),
+                **self._config.vus_dashboard_settings.model_dump(),
+            }
+            with open(self._config_dir / "vus_config.json", "w") as f:
+                json.dump(combined_vus, f, indent=2)
 
     def _deep_merge(self, current: dict, updates: dict):
         for key, value in updates.items():

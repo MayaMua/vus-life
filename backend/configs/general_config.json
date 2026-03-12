@@ -1,6 +1,4 @@
 {
-  "general_settings": {
-    "output_path": "/Users/jiawu/Workspace/postdoc-projects/variant-research/vus-life/data_local",
-    "has_accepted_agreement": true
-  }
+  "output_path": "/tmp/custom",
+  "has_accepted_agreement": false
 }

@@ -11,10 +11,10 @@ from app.core.config import SettingsManager, get_settings_manager
 from app.schemas.settings import (
     GeneralSettingsSchema,
     ProviderSchema,
-    ModelSettingsSchema,
-    SettingsResponse,
+    AllSettingsResponse,
     SettingsUpdateSchema,
     VusApiSettingsSchema,
+    ModelSettingsSchema,
     ProviderVerifyRequest,
     ProviderVerifyResponse,
 )
@@ -22,11 +22,21 @@ from app.schemas.settings import (
 router = APIRouter()
 
 
-def _config_to_response(manager: SettingsManager) -> SettingsResponse:
-    """Build SettingsResponse from current config."""
+def _general_config_to_response(manager: SettingsManager) -> GeneralSettingsSchema:
     c = manager.get()
-    
-    # Map providers dynamically
+    return GeneralSettingsSchema(
+        output_path=c.general_settings.output_path,
+        has_accepted_agreement=c.general_settings.has_accepted_agreement,
+    )
+
+
+def _vus_api_config_to_response(manager: SettingsManager) -> VusApiSettingsSchema:
+    c = manager.get()
+    return VusApiSettingsSchema(api_url=c.vus_api_settings.api_url)
+
+
+def _llm_config_to_response(manager: SettingsManager) -> ModelSettingsSchema:
+    c = manager.get()
     providers_response = {}
     for pid, p in c.model_settings.providers.items():
         providers_response[pid] = ProviderSchema(
@@ -35,34 +45,34 @@ def _config_to_response(manager: SettingsManager) -> SettingsResponse:
             api_key=p.api_key,
             models=p.models
         )
-        
-    return SettingsResponse(
-        general_settings=GeneralSettingsSchema(
-            output_path=c.general_settings.output_path,
-            has_accepted_agreement=c.general_settings.has_accepted_agreement,
-        ),
-        vus_api_settings=VusApiSettingsSchema(api_url=c.vus_api_settings.api_url),
-        model_settings=ModelSettingsSchema(
-            default_provider=c.model_settings.default_provider,
-            default_model=c.model_settings.default_model,
-            providers=providers_response
-        ),
+    return ModelSettingsSchema(
+        default_provider=c.model_settings.default_provider,
+        default_model=c.model_settings.default_model,
+        providers=providers_response
     )
 
 
-@router.get("/", response_model=SettingsResponse)
+def _config_to_response(manager: SettingsManager) -> AllSettingsResponse:
+    return AllSettingsResponse(
+        general_settings=_general_config_to_response(manager),
+        vus_api_settings=_vus_api_config_to_response(manager),
+        model_settings=_llm_config_to_response(manager),
+    )
+
+
+@router.get("/", response_model=AllSettingsResponse)
 async def get_settings(
     manager: SettingsManager = Depends(get_settings_manager),
-) -> SettingsResponse:
+) -> AllSettingsResponse:
     """Get current application settings (nested structure)."""
     return _config_to_response(manager)
 
 
-@router.patch("/", response_model=SettingsResponse)
+@router.patch("/", response_model=AllSettingsResponse)
 async def update_settings(
     payload: SettingsUpdateSchema,
     manager: SettingsManager = Depends(get_settings_manager),
-) -> SettingsResponse:
+) -> AllSettingsResponse:
     """Update application settings (partial nested update supported)."""
     try:
         raw = payload.model_dump(exclude_unset=True)

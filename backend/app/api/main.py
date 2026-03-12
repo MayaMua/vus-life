@@ -31,6 +31,7 @@ app.include_router(settings.router, prefix="/api/settings", tags=["settings"])
 app.include_router(vus.router, prefix="/api/vus", tags=["vus"])
 
 
+
 @app.get("/")
 async def root():
     """Root endpoint."""

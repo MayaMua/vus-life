@@ -30,18 +30,18 @@ class ProviderSchema(BaseModel):
 
 
 class ModelSettingsSchema(BaseModel):
-    """Model settings by provider."""
-    default_provider: str = "deepseek"
-    default_model: str = "deepseek-chat"
-    providers: Dict[str, ProviderSchema]
+    """Model settings."""
+    default_provider: str = ""
+    default_model: str = ""
+    providers: Dict[str, ProviderSchema] = {}
 
 
-class SettingsResponse(BaseModel):
-    """Response schema for GET /api/settings."""
-
+class AllSettingsResponse(BaseModel):
+    """Unified response for all settings."""
     general_settings: GeneralSettingsSchema
     vus_api_settings: VusApiSettingsSchema
     model_settings: ModelSettingsSchema
+
 
 
 class GeneralSettingsUpdate(BaseModel):
